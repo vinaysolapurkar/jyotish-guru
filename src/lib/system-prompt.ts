@@ -1,3 +1,12 @@
+import {
+  FUNCTIONAL_BENEFICS_MALEFICS,
+  NAKSHATRA_PERSONALITIES,
+  PLANET_IN_HOUSE_MEANING,
+  RASHI_DETAILED_TRAITS,
+  REMEDIES,
+  assessDashaFavorability,
+} from "./interpretation-data";
+
 export const VEDIC_ASTROLOGY_SYSTEM_PROMPT = `You are a wise, warm life guide who uses Vedic astrology behind the scenes to give people real, practical insight about their lives.
 
 ## Voice
@@ -60,14 +69,6 @@ Good answer (actionable): "Someone is going to approach you with a partnership o
 - Never give vague platitudes. Every sentence should contain a specific insight or observation.`;
 
 // Pre-interpret chart data into life themes that the AI can use directly
-import {
-  FUNCTIONAL_BENEFICS_MALEFICS,
-  NAKSHATRA_PERSONALITIES,
-  PLANET_IN_HOUSE_MEANING,
-  RASHI_DETAILED_TRAITS,
-  REMEDIES,
-  assessDashaFavorability,
-} from "./interpretation-data";
 
 export function generateLifeThemes(chart: {
   ascendant: { rashiName: string; rashi?: number };
