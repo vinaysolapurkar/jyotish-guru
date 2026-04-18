@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: #F8F3E8;
+  --color-foreground: #1A1613;
+  --color-ink: #1A1613;
+  --color-ink-soft: #524C44;
+  --color-accent: #8B2E1F;
+  --color-gold: #B5893C;
+  --color-parchment: #F8F3E8;
+  --color-parchment-2: #F5EFDF;
+  --color-rule: #E4D7BC;
+  --color-mute: #A59E91;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 46, 31, 0.25) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(139, 46, 31, 0.25);
+    border-radius: 3px;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #F8F3E8;
+  color: #1A1613;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
+
+.font-serif {
+  font-family: "Playfair Display", Georgia, serif;
+}
+
+/* Parchment card — replaces glass-card */
+.glass-card {
+  background: #F8F3E8;
+  border: 1px solid #E4D7BC;
+  border-radius: 4px;
+}
+
+/* Accent text — replaces gold-text with ink-on-cream style */
+.gold-text {
+  color: #8B2E1F;
+  font-style: italic;
+}
+
+/* Chat bubbles */
+.chat-bubble-user {
+  background: #1A1613;
+  color: #F8F3E8;
+  border-radius: 18px 18px 4px 18px;
+}
+
+.chat-bubble-ai {
+  background: #F5EFDF;
+  border: 1px solid #E4D7BC;
+  color: #1A1613;
+  border-radius: 18px 18px 18px 4px;
+}
+
+/* Typing indicator */
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot {
+  animation: typingDot 1.4s infinite ease-in-out;
+  background: #8B2E1F !important;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }

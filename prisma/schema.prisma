@@ -1,0 +1,131 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  password     String
+  birthDate    String?
+  birthTime    String?
+  birthPlace   String?
+  latitude     Float?
+  longitude    Float?
+  messageCount Int          @default(0)
+  tier         String       @default("free") // free | personal | pro | professional
+  displayMode  String       @default("simple") // simple | technical
+  profileFacts String       @default("")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  messages     Message[]
+  payments     Payment[]
+  birthCharts  BirthChart[]
+  telegramId   String?      @unique
+
+  // Family constellation - link family members
+  familyMembers FamilyMember[] @relation("owner")
+  familyOf      FamilyMember[] @relation("member")
+
+  // Standalone people added to my account (partner, child, parent, etc.)
+  relations Relation[]
+
+  // Gochara journal
+  gocharaEntries GocharaEntry[]
+
+  // Professional tier: client management
+  clients Client[]
+}
+
+// People added to a user's account for multi-chart astrology
+model Relation {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  relation   String   // partner | child | parent | sibling | friend | other
+  birthDate  String
+  birthTime  String
+  birthPlace String
+  latitude   Float
+  longitude  Float
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                  String   @id @default(cuid())
+  userId              String
+  amount              Float
+  currency            String   @default("USD")
+  plan                String?  // personal | pro | professional
+  interval            String?  // monthly | annual | lifetime
+  paypalTransactionId String?
+  status              String   @default("pending")
+  createdAt           DateTime @default(now())
+  expiresAt           DateTime?
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BirthChart {
+  id        String   @id @default(cuid())
+  userId    String
+  chartData String   // JSON: full chart with all vargas, yogas, dashas, ashtakavarga, etc.
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Gochara (transit) journal - daily personal correlation database
+model GocharaEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  date          String   // YYYY-MM-DD
+  transitData   String   // JSON: major transits of the day
+  userNote      String   // user's one-line note about what happened
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Family constellation - multi-chart relationships
+model FamilyMember {
+  id           String   @id @default(cuid())
+  ownerId      String
+  memberId     String
+  relationship String   // spouse | parent | child | sibling | partner | other
+  createdAt    DateTime @default(now())
+  owner        User     @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  member       User     @relation("member", fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+// Professional tier: client management for astrologers
+model Client {
+  id              String   @id @default(cuid())
+  astrologerId    String
+  name            String
+  email           String?
+  phone           String?
+  birthDate       String?
+  birthTime       String?
+  birthPlace      String?
+  latitude        Float?
+  longitude       Float?
+  chartData       String?  // JSON: computed chart
+  consultationNotes String @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  astrologer      User     @relation(fields: [astrologerId], references: [id], onDelete: Cascade)
+}

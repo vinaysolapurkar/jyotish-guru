@@ -1,0 +1,2 @@
+json_key_file("play-store-service-account.json") # Path to the Google Play service account JSON, relative to android/
+package_name("vincom.jyotishguru.app")

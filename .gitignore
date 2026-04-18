@@ -36,6 +36,42 @@ yarn-error.log*
 # vercel
 .vercel
 
+# database
+prisma/dev.db
+prisma/dev.db-journal
+
+# pdf reference
+vedic_astro_textbook.pdf
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+
+# Android / Capacitor
+/android/build/
+/android/app/build/
+/android/.gradle/
+/android/.idea/
+/android/local.properties
+/android/app/release/
+*.keystore
+*.jks
+/android/capacitor-cordova-android-plugins/build/
+
+# APK/AAB output (don't commit binaries)
+*.apk
+*.aab
+
+# Play Store service account key — NEVER commit
+/android/play-store-service-account.json
+/android/fastlane/report.xml
+/android/fastlane/Preview.html
+
+# Claude Code local scratch files
+/.claude/agent-memory/
+/memory/
+
+# Large assets that shouldn't be tracked
+vedic_astro_textbook.pdf

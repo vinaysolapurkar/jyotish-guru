@@ -1,0 +1,105 @@
+default_platform(:android)
+
+platform :android do
+
+  # Bump versionCode in build.gradle, returns the new value.
+  # Google Play rejects uploads with a versionCode that already exists in any track.
+  def bump_version_code
+    path = "../app/build.gradle"
+    content = File.read(path)
+    match = content.match(/versionCode\s+(\d+)/)
+    UI.user_error!("Could not find versionCode in app/build.gradle") unless match
+    new_code = match[1].to_i + 1
+    new_content = content.sub(/versionCode\s+\d+/, "versionCode #{new_code}")
+    File.write(path, new_content)
+    UI.message "Bumped versionCode to #{new_code}"
+    new_code
+  end
+
+  desc "Build a signed release AAB"
+  lane :build do
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      project_dir: ".."
+    )
+  end
+
+  desc "Upload the AAB to Play Store internal testing track"
+  lane :internal do
+    bump_version_code
+    gradle(task: "clean", project_dir: "..")
+    gradle(task: "bundle", build_type: "Release", project_dir: "..")
+    upload_to_play_store(
+      track: "internal",
+      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft"
+    )
+  end
+
+  desc "Promote to closed alpha testing track"
+  lane :alpha do
+    bump_version_code
+    gradle(task: "clean", project_dir: "..")
+    gradle(task: "bundle", build_type: "Release", project_dir: "..")
+    upload_to_play_store(
+      track: "alpha",
+      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Promote to open beta testing"
+  lane :beta do
+    bump_version_code
+    gradle(task: "clean", project_dir: "..")
+    gradle(task: "bundle", build_type: "Release", project_dir: "..")
+    upload_to_play_store(
+      track: "beta",
+      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Promote to production (public release)"
+  lane :production do
+    bump_version_code
+    gradle(task: "clean", project_dir: "..")
+    gradle(task: "bundle", build_type: "Release", project_dir: "..")
+    upload_to_play_store(
+      track: "production",
+      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft"  # set to "completed" to auto-publish; "draft" lets you review in the console first
+    )
+  end
+
+  desc "Upload metadata (description, screenshots) from /fastlane/metadata"
+  lane :metadata do
+    upload_to_play_store(
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_changelogs: false
+    )
+  end
+
+  desc "Validate service account credentials"
+  lane :validate do
+    validate_play_store_json_key(
+      json_key: "play-store-service-account.json"
+    )
+  end
+end
