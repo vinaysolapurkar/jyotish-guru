@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { VEDIC_ASTROLOGY_SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { VEDIC_ASTROLOGY_SYSTEM_PROMPT, generateLifeThemes } from "@/lib/system-prompt";
 import { calculateBirthChart, formatDegrees } from "@/lib/astrology";
 
 const FREE_MESSAGES_PER_DAY = 5;
@@ -75,11 +75,24 @@ export async function POST(req: NextRequest) {
         const sarvaStr = chart.ashtakavarga?.sarva?.map((v, i) => `${chart.houses[i]?.rashiName || i}: ${v}`).join(", ") || "N/A";
         const aspectStr = chart.aspects?.map((a) => `${a.planet} aspects houses ${a.aspectsHouses.join(",")}`).join("; ") || "N/A";
 
+        // Generate pre-interpreted life themes for the AI to use
+        const lifeThemes = generateLifeThemes(chart);
+
         birthContext = `\n\n========================
 THE USER'S BIRTH CHART (ALREADY COMPUTED — USE DIRECTLY, NEVER ASK TO CONFIRM)
 ========================
 Name: ${user.name || "User"}
 Birth: ${user.birthDate} at ${user.birthTime}, ${user.birthPlace || "N/A"}
+
+========================
+LIFE THEMES — USE THESE TO GIVE HELPFUL, SPECIFIC ANSWERS
+(These are pre-interpreted from the chart. Weave them naturally into your responses.)
+========================
+${lifeThemes}
+
+========================
+RAW CHART DATA (for additional detail — translate into plain life insights, never expose raw data)
+========================
 Ascendant: ${chart.ascendant.rashiName} at ${formatDegrees(chart.ascendant.degrees)}
 
 PLANETS:
@@ -105,6 +118,8 @@ CRITICAL RULES:
 - You ALREADY HAVE the user's birth details and chart above. NEVER ask for date, time, or location again.
 - NEVER say "could you confirm your birth details" or ask the user to verify them.
 - Treat the chart above as authoritative. Use it directly in every response.
+- PRIORITIZE the LIFE THEMES section — it contains pre-translated insights ready to use.
+- Never expose raw chart data (planet names, signs, houses) to the user.
 ========================`;
       } catch {
         birthContext = "\n\n[User has provided birth details but chart calculation encountered an issue. Please ask them to verify their birth details.]";

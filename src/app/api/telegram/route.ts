@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { VEDIC_ASTROLOGY_SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { VEDIC_ASTROLOGY_SYSTEM_PROMPT, generateLifeThemes } from "@/lib/system-prompt";
 import { calculateBirthChart } from "@/lib/astrology";
 
 const FREE_MESSAGES_PER_DAY = 5;
@@ -346,34 +346,37 @@ export async function POST(req: NextRequest) {
       const chart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
       const currentDasha = chart.vimsottariDasha.find((d) => new Date() >= d.startDate && new Date() <= d.endDate);
 
-      // VERY prominent chart context at the TOP of system prompt
+      // Generate pre-interpreted life themes
+      const lifeThemes = generateLifeThemes(chart);
+
       chartHeader = `========================
 THE USER'S BIRTH CHART (ALREADY COMPUTED — USE THIS DIRECTLY)
 ========================
 Name: ${user.name}
-Born: ${user.birthDate} at ${user.birthTime}
-Place: ${user.birthPlace}
-Latitude: ${user.latitude}, Longitude: ${user.longitude}
+Born: ${user.birthDate} at ${user.birthTime}, ${user.birthPlace}
 
-COMPUTED CHART:
-- Ascendant (Rising): ${chart.ascendant.rashiName}
-- Sun Sign: ${chart.sunSign} (${chart.sunNakshatra} Pada ${chart.sunNakshatraPada})
-- Moon Sign: ${chart.moonSign} (${chart.moonNakshatra} Pada ${chart.moonNakshatraPada})
-- Current Life Period (Mahadasha): ${currentDasha?.lord || "N/A"} ${currentDasha ? `(${new Date(currentDasha.startDate).getFullYear()} to ${new Date(currentDasha.endDate).getFullYear()})` : ""}
+========================
+LIFE THEMES — USE THESE TO GIVE HELPFUL, SPECIFIC ANSWERS
+========================
+${lifeThemes}
 
-PLANETARY POSITIONS:
-${chart.planets.map(p => `- ${p.name}: ${p.rashiName} ${Math.floor(p.degrees)}°${p.isExalted ? " [exalted]" : ""}${p.isDebilitated ? " [debilitated]" : ""}`).join("\n")}
-
-KEY PATTERNS (YOGAS): ${chart.yogas.slice(0, 8).map(y => y.split(":")[0]).join(", ")}
+========================
+RAW CHART (for additional detail — never expose to user)
+========================
+Ascendant: ${chart.ascendant.rashiName}
+Sun: ${chart.sunSign} | Moon: ${chart.moonSign}
+Current Period: ${currentDasha?.lord || "N/A"} ${currentDasha ? `(${new Date(currentDasha.startDate).getFullYear()}-${new Date(currentDasha.endDate).getFullYear()})` : ""}
+Planets: ${chart.planets.map(p => `${p.name}:${p.rashiName}${p.isExalted ? "[E]" : ""}${p.isDebilitated ? "[D]" : ""}`).join(", ")}
+Yogas: ${chart.yogas.slice(0, 8).map(y => y.split(":")[0]).join(", ")}
 
 ========================
 CRITICAL RULES:
-- You ALREADY HAVE the birth details. NEVER ASK for date of birth, time, or location — they're above.
-- NEVER say "could you confirm your birth details" or ask the user to verify them.
-- Use the computed chart data DIRECTLY to answer every question.
-- Treat the chart above as the authoritative source of truth about this person.
+- NEVER ASK for birth details — they're above.
+- PRIORITIZE the LIFE THEMES section for your answers.
+- Never expose chart data (planet names, signs, houses) to the user.
 ========================
 `;
+
     } catch {}
 
     // Include relations the user has added
