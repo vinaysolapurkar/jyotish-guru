@@ -123,7 +123,7 @@ async function getOrCreateUser(telegramId: string, firstName?: string) {
 }
 
 // Friendly assistant persona for onboarding - always warm, personal, conversational
-const FRIENDLY_ASSISTANT = `You are a warm, friendly Vedic astrologer having a personal conversation on Telegram. Write like a real person chatting with a friend — warm, curious, brief, human.
+const FRIENDLY_ASSISTANT = `You are a warm, friendly life guide having a personal conversation on Telegram. You use ancient wisdom behind the scenes, but you talk like a real person — no jargon, no astrology terminology.
 
 STRICT RULES:
 - NO markdown (no **, no *, no #, no bullets). Plain conversational text only.
@@ -131,7 +131,8 @@ STRICT RULES:
 - Use natural language. Contractions are fine ("I'll", "you're", "let's").
 - Occasional emoji is good but don't overdo it (1-2 max).
 - Never be robotic or formal. You're chatting, not filling a form.
-- Sound genuinely curious about them.`;
+- Sound genuinely curious about them.
+- NEVER mention planet names, signs, houses, nakshatras, or any astrology jargon.`;
 
 async function handleChart(chatId: string, userId: string, userName: string | null, birthDate: string, birthTime: string, birthPlace: string, latitude: number, longitude: number, displayMode: string) {
   try {
@@ -148,17 +149,19 @@ Rising Sign (outer personality): ${chart.ascendant.rashiName}
 Current Life Period: ${currentDasha?.lord || "unknown"} ${currentDasha ? `(${new Date(currentDasha.startDate).getFullYear()}-${new Date(currentDasha.endDate).getFullYear()})` : ""}
 Key Patterns: ${topYogas || "balanced configuration"}`;
 
-    const mode = displayMode === "technical" ? "Use Sanskrit terms like Rashi, Nakshatra, Mahadasha freely." : "Use simple English. Avoid Sanskrit terms.";
+    const mode = displayMode === "technical"
+      ? "You may use Sanskrit terms like Rashi, Nakshatra, Mahadasha."
+      : "NEVER use any astrology terms, planet names, sign names, or Sanskrit. Translate everything into plain life insights. Instead of naming planets or signs, describe personality traits, life patterns, and what's ahead in plain English.";
 
     const intro = await askDeepSeek(
-      `${FRIENDLY_ASSISTANT}\n\n${mode}\n\nYou just computed this person's Vedic birth chart. Reveal what you see.\n\nWrite 3-4 short paragraphs. Punchy. Specific. Make them feel seen in the first line. Name one specific thing the chart reveals about them that most people wouldn't know — something real, like "you carry a quiet fire that only shows under pressure" or "you've been waiting for someone to see the depth you carry, and haven't been ready to see it yourself." Then name the period they're in and what it's here to do for them. End with a single question that makes them want to write back immediately.\n\nNo bullet points. No "it's important to note". Speak directly to them.`,
-      `Chart:\n${chartData}\n\nWrite the chart reveal.`,
+      `${FRIENDLY_ASSISTANT}\n\n${mode}\n\nYou just looked into this person's life patterns based on when and where they were born. Share what you see about them.\n\nWrite 3-4 short paragraphs. Punchy. Specific. Make them feel seen in the first line. Name one specific thing about them that most people wouldn't know — something real, like "you carry a quiet fire that only shows under pressure" or "you've been waiting for someone to see the depth you carry." Then describe the chapter of life they're in right now and what it's building toward. End with a single question that makes them want to write back immediately.\n\nNo bullet points. No astrology jargon. No planet or sign names. Speak directly to them like a wise friend.`,
+      `Chart:\n${chartData}\n\nWrite what you see about this person — in plain, human language.`,
       600
     );
 
     await sendTelegramMessage(
       chatId,
-      intro || `I just pulled up your chart. Your Sun is in ${chart.sunSign}, Moon in ${chart.moonSign}, rising in ${chart.ascendant.rashiName}. You are currently in a ${currentDasha?.lord} period. There's a lot here — what would you like to know?`
+      intro || `I just looked into your chart and there's a lot to unpack. You're in an interesting chapter of life right now — one that's building toward something bigger than you might realize. What would you like to know about?`
     );
 
     await prisma.birthChart.create({
@@ -399,8 +402,8 @@ CRITICAL RULES:
     }));
 
     const modeContext = displayMode === "technical"
-      ? "\n\n[TECHNICAL MODE] Use full Sanskrit terminology."
-      : "\n\n[SIMPLE MODE] Use plain English, no jargon. Explain any technical term in simple words.";
+      ? "\n\n[TECHNICAL MODE] You may use Sanskrit terminology like Rashi, Nakshatra, Dasha, Yoga. Still keep the tone conversational."
+      : "\n\n[SIMPLE MODE — STRICTLY ENFORCED] Zero astrology jargon. Zero planet names. Zero Sanskrit terms. Talk ONLY about their real life — career, relationships, money, health, family, decisions. You're a wise friend giving life advice, not an astrologer. Rephrase every chart insight as a plain life observation.";
 
     const telegramTone = "\n\nYou are chatting on Telegram. Keep messages warm, personal, conversational. NO markdown (no **, no *, no #, no bullets). Short paragraphs like a friend talking, not a report.";
 
