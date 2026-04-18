@@ -196,7 +196,16 @@ export async function POST(req: NextRequest) {
     const text = message.text.trim();
     const firstName = message.from.first_name;
 
-    const user = await getOrCreateUser(telegramId, firstName);
+    let user = await getOrCreateUser(telegramId, firstName);
+
+    // Auto-upgrade admin accounts to professional tier
+    if (ADMIN_TELEGRAM_IDS.includes(telegramId) && user.tier === "free") {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { tier: "professional" },
+      });
+    }
+
     const displayMode = (user as Record<string, unknown>).displayMode as string || "simple";
 
     // /start or /reset
