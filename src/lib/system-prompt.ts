@@ -60,8 +60,17 @@ Good answer (actionable): "Someone is going to approach you with a partnership o
 - Never give vague platitudes. Every sentence should contain a specific insight or observation.`;
 
 // Pre-interpret chart data into life themes that the AI can use directly
+import {
+  FUNCTIONAL_BENEFICS_MALEFICS,
+  NAKSHATRA_PERSONALITIES,
+  PLANET_IN_HOUSE_MEANING,
+  RASHI_DETAILED_TRAITS,
+  REMEDIES,
+  assessDashaFavorability,
+} from "./interpretation-data";
+
 export function generateLifeThemes(chart: {
-  ascendant: { rashiName: string };
+  ascendant: { rashiName: string; rashi?: number };
   planets: Array<{
     name: string;
     rashiName: string;
@@ -76,72 +85,85 @@ export function generateLifeThemes(chart: {
   vimsottariDasha: Array<{ lord: string; startDate: Date; endDate: Date; years: number }>;
 }): string {
   const find = (name: string) => chart.planets.find(p => p.name === name)!;
-  const sun = find("Sun");
   const moon = find("Moon");
-  const mars = find("Mars");
-  const mercury = find("Mercury");
-  const jupiter = find("Jupiter");
-  const venus = find("Venus");
-  const saturn = find("Saturn");
-  const rahu = find("Rahu");
-  const ketu = find("Ketu");
   const asc = chart.ascendant.rashiName;
+  const ascRashi = chart.ascendant.rashi ?? Math.floor(find("Sun").rashi); // fallback
+
+  const getHouse = (planetRashi: number) => ((planetRashi - ascRashi + 12) % 12) + 1;
 
   const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
   const nextDasha = chart.vimsottariDasha.find(d => d.startDate > new Date());
 
   const themes: string[] = [];
 
-  // === CORE PERSONALITY ===
+  // === CORE PERSONALITY (from textbook Chapter 2 rashi traits) ===
   themes.push("=== PERSONALITY (use these to make the person feel seen) ===");
 
-  // Ascendant-based personality
-  const ascTraits: Record<string, string> = {
-    "Aries": "Action-oriented, competitive, impatient, natural leader. Starts things fast but sometimes doesn't finish. Hates being told what to do.",
-    "Taurus": "Steady, sensual, values comfort and security. Stubborn but reliable. Takes time to trust but deeply loyal once committed.",
-    "Gemini": "Quick-minded, curious, loves variety. Gets bored easily. Great communicator but can be scattered. Multiple interests at once.",
-    "Cancer": "Emotionally deep, nurturing, protective of family. Moody but caring. Remembers everything — especially how people made them feel.",
-    "Leo": "Confident, generous, needs recognition. Natural performer. Can be proud but also incredibly warm-hearted. Hates being ignored.",
-    "Virgo": "Analytical, detail-oriented, perfectionist. Helpful but critical — of self and others. Worries more than they show.",
-    "Libra": "Diplomatic, aesthetic, values harmony. Struggles with decisions because they see every side. Hates conflict but needs to learn it.",
-    "Scorpio": "Intense, perceptive, private. Feels everything deeply. Loyal to death but never forgets betrayal. Transformative nature.",
-    "Sagittarius": "Optimistic, philosophical, freedom-loving. Big-picture thinker. Blunt but honest. Needs adventure and meaning in life.",
-    "Capricorn": "Ambitious, disciplined, takes life seriously. Grows younger with age. Dry humor. Quietly determined to succeed.",
-    "Aquarius": "Independent, unconventional, thinks differently. Cares about causes bigger than themselves. Emotionally detached but intellectually brilliant.",
-    "Pisces": "Intuitive, dreamy, compassionate. Absorbs other people's emotions. Creative and spiritual but can lose themselves in escapism.",
-  };
-  themes.push("Outer personality: " + (ascTraits[asc] || "Complex, multi-faceted personality."));
+  const ascTrait = RASHI_DETAILED_TRAITS[asc];
+  if (ascTrait) {
+    themes.push(`Outer personality (how they come across): ${ascTrait.personality}`);
+    themes.push(`Physical constitution: ${ascTrait.constitution} type. Body area to watch: ${ascTrait.bodyPart}.`);
+  }
 
-  // Moon-based emotional nature
-  const moonTraits: Record<string, string> = {
-    "Aries": "Emotionally impulsive. Needs excitement and action to feel alive. Quick to anger, quick to forgive.",
-    "Taurus": "Emotionally stable and grounded. Needs comfort, good food, beautiful surroundings. Slow to change feelings.",
-    "Gemini": "Emotionally restless. Processes feelings through talking and thinking. Needs mental stimulation in relationships.",
-    "Cancer": "Deeply emotional and intuitive. Strong attachment to home and mother. Mood swings tied to environment.",
-    "Leo": "Emotionally warm and dramatic. Needs to feel special and appreciated. Generous with love but easily hurt by disrespect.",
-    "Virgo": "Emotionally analytical. Tends to worry and overthink feelings. Shows love through service and practical help.",
-    "Libra": "Emotionally needs partnership and harmony. Uncomfortable being alone. Avoids emotional confrontation.",
-    "Scorpio": "Emotionally intense and private. Feels everything at maximum volume. Trust issues but deeply devoted when committed.",
-    "Sagittarius": "Emotionally optimistic and freedom-loving. Bounces back quickly. Needs space in relationships to feel safe.",
-    "Capricorn": "Emotionally reserved. Doesn't show vulnerability easily. Feels deeply but expresses through actions, not words.",
-    "Aquarius": "Emotionally detached. Thinks about feelings more than feels them. Needs intellectual connection in relationships.",
-    "Pisces": "Emotionally porous — absorbs everyone's energy. Deeply compassionate but can feel overwhelmed. Needs alone time to recharge.",
-  };
-  themes.push("Inner emotional world: " + (moonTraits[moon.rashiName] || "Complex emotional landscape."));
+  // Moon nakshatra — deepest personality layer
+  const nakshatraPersonality = NAKSHATRA_PERSONALITIES[moon.nakshatraName];
+  if (nakshatraPersonality) {
+    themes.push(`Deepest inner nature (from birth star): ${nakshatraPersonality}`);
+  }
 
-  // Sun-based core identity
-  themes.push("Core drive/identity (what they're here to develop): " + getSunTheme(sun));
+  // Moon sign — emotional nature
+  const moonTrait = RASHI_DETAILED_TRAITS[moon.rashiName];
+  if (moonTrait) {
+    themes.push(`Emotional world: ${moonTrait.personality}`);
+  }
 
-  // === CURRENT LIFE CHAPTER ===
+  // Sun — core identity
+  themes.push("Core drive/identity (what they're here to develop): " + getSunTheme(find("Sun")));
+
+  // === KEY PLANET PLACEMENTS (from textbook planet-in-house meanings) ===
+  themes.push("\n=== KEY LIFE AREAS (from planet positions — use these for specific questions) ===");
+
+  const keyPlanets = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"];
+  for (const pName of keyPlanets) {
+    const p = find(pName);
+    const house = getHouse(p.rashi);
+    const meaning = PLANET_IN_HOUSE_MEANING[pName]?.[house];
+    if (meaning) {
+      themes.push(`${pName} energy (house ${house}): ${meaning}`);
+    }
+  }
+
+  // === FUNCTIONAL ANALYSIS (from textbook Table 30) ===
+  themes.push("\n=== WHICH FORCES HELP vs CHALLENGE THIS PERSON ===");
+  const funcData = FUNCTIONAL_BENEFICS_MALEFICS[asc];
+  if (funcData) {
+    if (funcData.yogakaraka) {
+      themes.push(`SPECIAL ADVANTAGE: ${funcData.yogakaraka} is their yogakaraka — a uniquely powerful ally that brings both stability and growth to their life.`);
+    }
+    themes.push(`Forces working FOR them: ${funcData.benefics.join(", ")} energies`);
+    themes.push(`Forces working AGAINST them: ${funcData.malefics.join(", ")} energies`);
+  }
+
+  // === CURRENT LIFE CHAPTER (enhanced with favorability from textbook) ===
   themes.push("\n=== CURRENT LIFE CHAPTER (use this for timing and 'what's happening now' questions) ===");
 
   if (currentDasha) {
     const dashaTheme = getDashaLifeTheme(currentDasha.lord);
     const yearsLeft = Math.round((currentDasha.endDate.getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000) * 10) / 10;
+    const dashaP = find(currentDasha.lord);
+    const favorability = assessDashaFavorability(
+      currentDasha.lord, asc, dashaP.rashi, ascRashi, dashaP.isExalted, dashaP.isDebilitated
+    );
     themes.push(`Current life chapter: ${dashaTheme}`);
+    themes.push(`Period assessment: ${favorability.description}`);
     themes.push(`This chapter has about ${yearsLeft} years left.`);
     if (nextDasha) {
+      const nextP = find(nextDasha.lord);
+      const nextFav = assessDashaFavorability(
+        nextDasha.lord, asc, nextP.rashi, ascRashi, nextP.isExalted, nextP.isDebilitated
+      );
       themes.push(`Next chapter (starting ~${new Date(nextDasha.startDate).getFullYear()}): ${getDashaLifeTheme(nextDasha.lord)}`);
+      themes.push(`Next period outlook: ${nextFav.description}`);
     }
   }
 
@@ -155,17 +177,36 @@ export function generateLifeThemes(chart: {
   themes.push(getRelationshipTheme(chart));
 
   // === KEY STRENGTHS & CHALLENGES ===
-  themes.push("\n=== KEY STRENGTHS & CHALLENGES (from yoga patterns) ===");
-  const yogaInsights = chart.yogas.slice(0, 8).map(y => translateYogaToLife(y));
+  themes.push("\n=== KEY STRENGTHS & CHALLENGES ===");
+  const yogaInsights = chart.yogas.slice(0, 10).map(y => translateYogaToLife(y)).filter(Boolean);
   themes.push(yogaInsights.join("\n"));
 
-  // === EXALTED/DEBILITATED planets as strengths/challenges ===
+  // Exalted/debilitated planets
   for (const p of chart.planets) {
     if (p.isExalted) {
       themes.push(`STRENGTH: ${getExaltedMeaning(p.name)}`);
     }
     if (p.isDebilitated) {
       themes.push(`CHALLENGE: ${getDebilitatedMeaning(p.name)}`);
+    }
+  }
+
+  // === REMEDIES (from textbook Chapter 34) ===
+  themes.push("\n=== REMEDIES & PRACTICAL ADVICE (offer when asked about improving life) ===");
+  // Find the most challenged planet (debilitated or dasha lord if malefic)
+  const challengedPlanets = chart.planets.filter(p => p.isDebilitated);
+  if (challengedPlanets.length > 0) {
+    for (const cp of challengedPlanets.slice(0, 2)) {
+      const remedy = REMEDIES[cp.name];
+      if (remedy) {
+        themes.push(`To strengthen ${cp.name} energy: Wear ${remedy.gemstone} on ${remedy.finger} in ${remedy.metal}. Color to favor: ${remedy.color}. ${remedy.good_deeds} Worship: ${remedy.deity}.`);
+      }
+    }
+  }
+  if (currentDasha) {
+    const dashaRemedy = REMEDIES[currentDasha.lord];
+    if (dashaRemedy) {
+      themes.push(`For current life chapter: Favor the color ${dashaRemedy.color}. ${dashaRemedy.good_deeds}`);
     }
   }
 
