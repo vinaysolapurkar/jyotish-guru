@@ -4,6 +4,7 @@ import { VEDIC_ASTROLOGY_SYSTEM_PROMPT, generateLifeThemes } from "@/lib/system-
 import { calculateBirthChart } from "@/lib/astrology";
 
 const FREE_MESSAGES_PER_DAY = 5;
+const ADMIN_TELEGRAM_IDS = ["1923935459"]; // Vinay — app owner
 const UPI_ID = "9916467570@ybl";
 const UPI_NAME = "Jyotish Guru";
 const MONTHLY_PRICE_INR = 99;
@@ -328,9 +329,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // PAYWALL — 5 free per day
-    const todayCount = await countTodayUserMessages(user.id);
-    if (user.tier === "free" && todayCount >= FREE_MESSAGES_PER_DAY) {
+    // PAYWALL — 5 free per day (admins bypass)
+    const isAdmin = ADMIN_TELEGRAM_IDS.includes(telegramId);
+    const todayCount = isAdmin ? 0 : await countTodayUserMessages(user.id);
+    if (!isAdmin && user.tier === "free" && todayCount >= FREE_MESSAGES_PER_DAY) {
       const upiLink = buildUpiLink(MONTHLY_PRICE_INR, "Jyotish Guru Monthly");
       await sendTelegramMessage(
         chatId,
@@ -451,7 +453,7 @@ CRITICAL RULES:
       data: { messageCount: { increment: 1 } },
     });
 
-    const remaining = user.tier === "free" ? Math.max(0, FREE_MESSAGES_PER_DAY - (todayCount + 1)) : null;
+    const remaining = (!isAdmin && user.tier === "free") ? Math.max(0, FREE_MESSAGES_PER_DAY - (todayCount + 1)) : null;
     const footer = remaining !== null && remaining <= 2
       ? `\n\n(${remaining} free question${remaining === 1 ? "" : "s"} left today)`
       : "";
