@@ -34,7 +34,7 @@ AVAILABLE COMPUTATIONS (pick one or more, return JSON):
 TIMING:
 - marriage_timing: When marriage happened/will happen. Needs: birth_data. Optional: actual_marriage_year (for rectification).
 - career_timing: Career changes, promotions, job loss. Needs: birth_data.
-- children_timing: When children born/will be born. Needs: birth_data. Optional: actual_children_years.
+- children_timing: When children born/will be born. Needs: birth_data. Optional: marriage_year (IMPORTANT: ask user when they married BEFORE predicting children — children come after marriage), actual_children_years.
 - difficult_periods: Losses, setbacks, health crises, accidents. Needs: birth_data.
 - wealth_periods: Financial gains, income growth. Needs: birth_data.
 - education_timing: Academic achievements, degree completion. Needs: birth_data.
@@ -452,7 +452,7 @@ export const COMPUTATION_REGISTRY: Record<string, {
     name: "Children Timing",
     description: "Predicts when children are born based on 5th house and Jupiter periods.",
     requiredInputs: ["birth_data"],
-    optionalInputs: ["actual_children_years"],
+    optionalInputs: ["marriage_year", "actual_children_years"],
     compute: (chart, params) => {
       const lines: string[] = ["CHILDREN TIMING ANALYSIS\n"];
 
@@ -471,7 +471,17 @@ export const COMPUTATION_REGISTRY: Record<string, {
 
       // Timing via houses 5, 9 (children, fortune), 2 (family growth)
       lines.push("\nKey children timing periods:");
-      const periods = timingForHouses(chart, [5, 9, 2]);
+      let periods = timingForHouses(chart, [5, 9, 2]);
+
+      // Filter: children come AFTER marriage
+      const marriageYear = params?.marriage_year ? Number(params.marriage_year) : null;
+      if (marriageYear) {
+        periods = periods.filter(p => {
+          const yearMatch = p.match(/\((\d{4})/);
+          return yearMatch ? Number(yearMatch[1]) >= marriageYear : true;
+        });
+        lines.push(`(Filtered to periods after marriage year ${marriageYear})`);
+      }
       lines.push(periods.slice(0, 10).join("\n"));
 
       if (params?.actual_children_years) {
