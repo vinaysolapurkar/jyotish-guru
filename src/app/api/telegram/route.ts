@@ -481,7 +481,7 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
     const recentMessages = await prisma.message.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 2, // Keep minimal history — old wrong answers poison the AI
     });
     const history = recentMessages.reverse().map((m) => ({
       role: m.role as "user" | "assistant",
@@ -570,9 +570,23 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
     const telegramTone = "\n\nYou are chatting on Telegram. Keep messages warm, personal, conversational. NO markdown (no **, no *, no #, no bullets). Short paragraphs like a friend talking, not a report.";
 
     // If we have a computed answer, override the system prompt to force the AI to use it
-    const computeOverride = computedAnswer ? `\n\n========================\n${computedAnswer}\n========================\nYOU MUST base your response on the COMPUTED ANSWER above. Do NOT ignore it. Do NOT make up different dates or facts. Just rephrase it warmly in plain language.\n========================` : "";
+    const computeOverride = computedAnswer ? `
+!!!!! MANDATORY INSTRUCTION — READ THIS FIRST !!!!!
+${computedAnswer}
 
-    const fullSystemPrompt = chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone + computeOverride;
+YOUR ENTIRE RESPONSE MUST BE BASED ON THE COMPUTED DATES ABOVE.
+- State the dates from the computed answer
+- Do NOT use any other dates
+- Do NOT say "you haven't married" or make assumptions about the user's life
+- Simply say "your chart shows the strongest window was [dates from above]"
+- Keep it to 2-3 short paragraphs
+- Ask "does this match?" at the end
+!!!!! END MANDATORY INSTRUCTION !!!!!
+
+` : "";
+
+    // COMPUTED ANSWER goes FIRST — before everything else — so the AI sees it immediately
+    const fullSystemPrompt = computeOverride + chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone;
 
     // DEBUG MODE — admin can see the exact prompt being sent
     if (isAdmin && (text.startsWith("/debug ") || text.startsWith("/prompt "))) {
