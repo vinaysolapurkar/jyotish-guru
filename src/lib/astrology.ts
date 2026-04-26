@@ -164,8 +164,10 @@ function getMarsLongitude(jd: number): number {
   const L = 355.433 + 19140.2993 * T;
   const M = 319.513 + 19139.8585 * T;
   const Mrad = (M * Math.PI) / 180;
-  const lon = L + 10.691 * Math.sin(Mrad) + 0.623 * Math.sin(2 * Mrad);
-  return normalize360(lon);
+  // Enhanced equation of center with additional terms
+  const C = 10.691 * Math.sin(Mrad) + 0.623 * Math.sin(2 * Mrad) +
+    0.050 * Math.sin(3 * Mrad) + 0.005 * Math.sin(4 * Mrad);
+  return normalize360(L + C);
 }
 
 function getMercuryLongitude(jd: number): number {
@@ -182,8 +184,13 @@ function getJupiterLongitude(jd: number): number {
   const L = 34.351 + 3034.9057 * T;
   const M = 20.020 + 3034.6870 * T;
   const Mrad = (M * Math.PI) / 180;
-  const lon = L + 5.555 * Math.sin(Mrad) + 0.168 * Math.sin(2 * Mrad);
-  return normalize360(lon);
+  // Enhanced equation of center
+  const C = 5.555 * Math.sin(Mrad) + 0.168 * Math.sin(2 * Mrad) +
+    0.007 * Math.sin(3 * Mrad);
+  // Jupiter-Saturn great inequality (long-period perturbation)
+  const MSat = (317.021 + 1222.1116 * T) * Math.PI / 180;
+  const perturbation = -0.332 * Math.sin(2 * Mrad - 5 * MSat + 1.15);
+  return normalize360(L + C + perturbation);
 }
 
 function getVenusLongitude(jd: number): number {
@@ -200,8 +207,13 @@ function getSaturnLongitude(jd: number): number {
   const L = 50.077 + 1222.1138 * T;
   const M = 317.021 + 1222.1116 * T;
   const Mrad = (M * Math.PI) / 180;
-  const lon = L + 6.404 * Math.sin(Mrad) + 0.169 * Math.sin(2 * Mrad);
-  return normalize360(lon);
+  // Enhanced equation of center
+  const C = 6.404 * Math.sin(Mrad) + 0.169 * Math.sin(2 * Mrad) +
+    0.011 * Math.sin(3 * Mrad);
+  // Jupiter-Saturn great inequality perturbation
+  const MJup = (20.020 + 3034.6870 * T) * Math.PI / 180;
+  const perturbation = 0.419 * Math.sin(2 * MJup - 5 * Mrad + 1.15);
+  return normalize360(L + C + perturbation);
 }
 
 function getRahuLongitude(jd: number): number {
@@ -258,6 +270,25 @@ export interface PlanetaryAspectData {
   aspectsHouses: number[];
 }
 
+export interface DivisionalChartData {
+  ascendant: { rashi: number; rashiName: string };
+  planets: { name: string; rashi: number; rashiName: string }[];
+}
+
+export interface TransitPlanetData {
+  name: string;
+  currentRashi: string;
+  natalHouse: number;
+  isRetrograde: boolean;
+  ashtakavargaBindus: number;
+  interpretation: string;
+}
+
+export interface TransitData {
+  date: Date;
+  planets: TransitPlanetData[];
+}
+
 export interface BirthChartData {
   ascendant: {
     longitude: number;
@@ -280,6 +311,8 @@ export interface BirthChartData {
   specialLagnas: SpecialLagnaData[];
   charaKarakas: CharaKarakaData[];
   aspects: PlanetaryAspectData[];
+  navamsa: DivisionalChartData;
+  dasamsa: DivisionalChartData;
 }
 
 export interface DashaPeriod {
@@ -287,6 +320,7 @@ export interface DashaPeriod {
   startDate: Date;
   endDate: Date;
   years: number;
+  antardashas?: DashaPeriod[];
 }
 
 function calculateAscendant(jd: number, latitude: number, longitude: number): number {
@@ -307,6 +341,313 @@ function calculateAscendant(jd: number, latitude: number, longitude: number): nu
   ascendant = normalize360(ascendant);
 
   return ascendant;
+}
+
+// --- Retrograde Detection ---
+// Superior planets (Mars, Jupiter, Saturn) are retrograde near opposition to Sun
+// Inferior planets (Mercury, Venus) are retrograde when near inferior conjunction
+function detectRetrograde(planetName: string, planetTropLon: number, sunTropLon: number, jd: number): boolean {
+  // Sun and Moon are never retrograde; Rahu/Ketu always retrograde (handled separately)
+  if (planetName === "Sun" || planetName === "Moon") return false;
+  if (planetName === "Rahu") return true;
+
+  const elongation = normalize360(planetTropLon - sunTropLon);
+
+  // Superior planets: retrograde when elongation is roughly 120-240 degrees (near opposition)
+  if (planetName === "Mars") {
+    // Mars retrograde zone: approximately 130-230 degrees from Sun
+    return elongation > 130 && elongation < 230;
+  }
+  if (planetName === "Jupiter") {
+    // Jupiter retrograde zone: approximately 120-240 degrees from Sun
+    return elongation > 120 && elongation < 240;
+  }
+  if (planetName === "Saturn") {
+    // Saturn retrograde zone: approximately 110-250 degrees from Sun
+    return elongation > 110 && elongation < 250;
+  }
+
+  // Inferior planets: retrograde when near inferior conjunction (elongation near 0 but
+  // the planet is between Earth and Sun)
+  if (planetName === "Mercury") {
+    // Mercury: check speed by computing position slightly ahead
+    const lon1 = getMercuryLongitude(jd);
+    const lon2 = getMercuryLongitude(jd + 1);
+    const sunLon1 = getMeanSunLongitude(jd);
+    const sunLon2 = getMeanSunLongitude(jd + 1);
+    const relSpeed = normalize360(lon2 - sunLon2) - normalize360(lon1 - sunLon1);
+    return relSpeed < -0.5; // If Mercury moves backward relative to Sun
+  }
+  if (planetName === "Venus") {
+    const lon1 = getVenusLongitude(jd);
+    const lon2 = getVenusLongitude(jd + 1);
+    const sunLon1 = getMeanSunLongitude(jd);
+    const sunLon2 = getMeanSunLongitude(jd + 1);
+    const relSpeed = normalize360(lon2 - sunLon2) - normalize360(lon1 - sunLon1);
+    return relSpeed < -0.5;
+  }
+
+  return false;
+}
+
+// --- Divisional Charts (Vargas) ---
+
+// Sign type classification for divisional chart calculations
+function getSignType(rashi: number): "movable" | "fixed" | "dual" {
+  // Movable (Chara): Aries(0), Cancer(3), Libra(6), Capricorn(9)
+  // Fixed (Sthira): Taurus(1), Leo(4), Scorpio(7), Aquarius(10)
+  // Dual (Dvisvabhava): Gemini(2), Virgo(5), Sagittarius(8), Pisces(11)
+  const mod = rashi % 3;
+  if (mod === 0) return "movable";
+  if (mod === 1) return "fixed";
+  return "dual";
+}
+
+/**
+ * Calculate divisional chart placement for a single longitude.
+ * @param siderealLongitude - sidereal longitude in degrees (0-360)
+ * @param division - the varga division (9 for navamsa, 10 for dasamsa, 7 for saptamsa)
+ * @returns rashi index (0-11)
+ */
+function calculateVargaRashi(siderealLongitude: number, division: number): number {
+  const rashi = Math.floor(siderealLongitude / 30);
+  const degreesInSign = siderealLongitude - rashi * 30;
+  const partSize = 30 / division;
+  const partIndex = Math.floor(degreesInSign / partSize);
+
+  if (division === 9) {
+    // Navamsa: starting sign depends on sign type
+    const signType = getSignType(rashi);
+    let startSign: number;
+    if (signType === "movable") {
+      startSign = rashi; // From the sign itself
+    } else if (signType === "fixed") {
+      startSign = (rashi + 8) % 12; // From the 9th sign
+    } else {
+      startSign = (rashi + 4) % 12; // From the 5th sign
+    }
+    return (startSign + partIndex) % 12;
+  }
+
+  if (division === 10) {
+    // Dasamsa
+    const isOdd = rashi % 2 === 0; // 0-indexed: even index = odd sign (Aries=0 is odd sign)
+    const startSign = isOdd ? rashi : (rashi + 8) % 12;
+    return (startSign + partIndex) % 12;
+  }
+
+  if (division === 7) {
+    // Saptamsa
+    const isOdd = rashi % 2 === 0;
+    const startSign = isOdd ? rashi : (rashi + 6) % 12;
+    return (startSign + partIndex) % 12;
+  }
+
+  // Generic fallback for other divisions
+  return (rashi + partIndex) % 12;
+}
+
+/**
+ * Calculate a divisional chart for all planets and ascendant.
+ */
+export function calculateDivisionalChart(
+  planets: PlanetPosition[],
+  ascendantLongitude: number,
+  division: number,
+  ayanamsa: number
+): DivisionalChartData {
+  const ascRashi = calculateVargaRashi(ascendantLongitude, division);
+  const planetResults = planets.map((p) => {
+    const vargaRashi = calculateVargaRashi(p.longitude, division);
+    return {
+      name: p.name,
+      rashi: vargaRashi,
+      rashiName: RASHI_NAMES[vargaRashi],
+    };
+  });
+
+  return {
+    ascendant: { rashi: ascRashi, rashiName: RASHI_NAMES[ascRashi] },
+    planets: planetResults,
+  };
+}
+
+// --- Transit Analysis ---
+
+/**
+ * Calculate current planetary positions for transit analysis.
+ */
+function calculateCurrentPlanets(ayanamsa: number): PlanetPosition[] {
+  const now = new Date();
+  const jd = dateToJulianDay(now.getFullYear(), now.getMonth() + 1, now.getDate(), now.getHours());
+  const currentAyanamsa = getLahiriAyanamsa(jd);
+  const sunTropLon = getMeanSunLongitude(jd);
+
+  const positionFns: { name: string; fn: (jd: number) => number }[] = [
+    { name: "Sun", fn: getMeanSunLongitude },
+    { name: "Moon", fn: getMeanMoonLongitude },
+    { name: "Mars", fn: getMarsLongitude },
+    { name: "Mercury", fn: getMercuryLongitude },
+    { name: "Jupiter", fn: getJupiterLongitude },
+    { name: "Venus", fn: getVenusLongitude },
+    { name: "Saturn", fn: getSaturnLongitude },
+    { name: "Rahu", fn: getRahuLongitude },
+  ];
+
+  const planets: PlanetPosition[] = positionFns.map((p, index) => {
+    const tropLon = p.fn(jd);
+    const sidLon = normalize360(tropLon - currentAyanamsa);
+    const rashi = Math.floor(sidLon / 30);
+    const degreesInRashi = sidLon - rashi * 30;
+    const nakshatra = Math.floor(sidLon / (360 / 27));
+    const nakshatraPada = Math.floor((sidLon % (360 / 27)) / (360 / 108)) + 1;
+    const isRetrograde = detectRetrograde(p.name, tropLon, sunTropLon, jd);
+
+    return {
+      name: GRAHA_NAMES[index],
+      sanskritName: GRAHA_SANSKRIT[index],
+      longitude: sidLon,
+      rashi,
+      rashiName: RASHI_NAMES[rashi],
+      rashiSanskrit: RASHI_SANSKRIT[rashi],
+      degrees: degreesInRashi,
+      nakshatra,
+      nakshatraName: NAKSHATRA_NAMES[nakshatra] || "Unknown",
+      nakshatraPada,
+      isExalted: EXALTATION[p.name] === rashi,
+      isDebilitated: DEBILITATION[p.name] === rashi,
+      isRetrograde,
+    };
+  });
+
+  // Add Ketu
+  const rahuPos = planets.find((p) => p.name === "Rahu")!;
+  const ketuLon = normalize360(rahuPos.longitude + 180);
+  const ketuRashi = Math.floor(ketuLon / 30);
+  const ketuDeg = ketuLon - ketuRashi * 30;
+  const ketuNak = Math.floor(ketuLon / (360 / 27));
+  const ketuPada = Math.floor((ketuLon % (360 / 27)) / (360 / 108)) + 1;
+
+  planets.push({
+    name: "Ketu",
+    sanskritName: "Ketu",
+    longitude: ketuLon,
+    rashi: ketuRashi,
+    rashiName: RASHI_NAMES[ketuRashi],
+    rashiSanskrit: RASHI_SANSKRIT[ketuRashi],
+    degrees: ketuDeg,
+    nakshatra: ketuNak,
+    nakshatraName: NAKSHATRA_NAMES[ketuNak] || "Unknown",
+    nakshatraPada: ketuPada,
+    isExalted: EXALTATION["Ketu"] === ketuRashi,
+    isDebilitated: DEBILITATION["Ketu"] === ketuRashi,
+    isRetrograde: true,
+  });
+
+  return planets;
+}
+
+// Transit interpretation templates
+const TRANSIT_INTERPRETATIONS: Record<string, Record<number, string>> = {
+  Sun: {
+    1: "Focus on self, health, and vitality",
+    2: "Financial matters and family communication come to fore",
+    3: "Courage, short travels, and sibling matters highlighted",
+    4: "Home, mother, and emotional well-being emphasized",
+    5: "Creativity, children, and intelligence activated",
+    6: "Health challenges, competition, and service matters",
+    7: "Partnerships and relationship dynamics in focus",
+    8: "Transformation, research, and hidden matters surface",
+    9: "Fortune, higher learning, and spiritual growth",
+    10: "Career advancement and public recognition possible",
+    11: "Gains, friendships, and fulfillment of desires",
+    12: "Expenditure, foreign connections, and spiritual retreat",
+  },
+  Saturn: {
+    1: "Period of self-discipline and restructuring",
+    2: "Financial caution and family responsibilities",
+    3: "Persistent effort in communications and courage tested",
+    4: "Home renovations or property matters require patience",
+    5: "Disciplined creativity; children may need attention",
+    6: "Victory over enemies through persistence",
+    7: "Relationship tests and commitment themes",
+    8: "Deep transformation; health needs attention",
+    9: "Structured spiritual growth; father figure themes",
+    10: "Career rewards for hard work; authority increases",
+    11: "Steady gains through disciplined networking",
+    12: "Spiritual discipline; expenses need management",
+  },
+  Jupiter: {
+    1: "Expansion of personality and new opportunities",
+    2: "Wealth increase and positive family developments",
+    3: "Courageous initiatives and beneficial short journeys",
+    4: "Home blessings, vehicle gains, and emotional peace",
+    5: "Creative expansion, children's progress, and wisdom",
+    6: "Overcoming obstacles and improved health",
+    7: "Beneficial partnerships and marriage prospects",
+    8: "Spiritual insights and unexpected windfalls",
+    9: "Peak fortune, dharma activation, and guru blessings",
+    10: "Career growth, promotion, and public recognition",
+    11: "Maximum gains, influential friends, and fulfilled wishes",
+    12: "Spiritual growth and beneficial foreign connections",
+  },
+};
+
+/**
+ * Score a transit using Sarvashtakavarga points.
+ */
+export function scoreTransit(
+  planetName: string,
+  transitRashi: number,
+  ashtakavarga: AshtakavargaData
+): { score: number; favorable: boolean } {
+  const bindus = ashtakavarga.sarva[transitRashi];
+  return {
+    score: bindus,
+    favorable: bindus >= 28,
+  };
+}
+
+/**
+ * Calculate current planetary transits relative to a birth chart.
+ */
+export function calculateTransits(birthChart: BirthChartData): TransitData {
+  const now = new Date();
+  const jd = dateToJulianDay(now.getFullYear(), now.getMonth() + 1, now.getDate(), now.getHours());
+  const ayanamsa = getLahiriAyanamsa(jd);
+
+  const currentPlanets = calculateCurrentPlanets(ayanamsa);
+  const ascRashi = birthChart.ascendant.rashi;
+
+  const transitPlanets: TransitPlanetData[] = currentPlanets.map((tp) => {
+    const natalHouse = ((tp.rashi - ascRashi + 12) % 12) + 1;
+    const transitScore = scoreTransit(tp.name, tp.rashi, birthChart.ashtakavarga);
+
+    // Get interpretation
+    const planetInterp = TRANSIT_INTERPRETATIONS[tp.name];
+    let interpretation = planetInterp?.[natalHouse] ||
+      `${tp.name} transiting house ${natalHouse} - general themes of that house activated`;
+
+    if (transitScore.favorable) {
+      interpretation += " (SAV favorable: strong positive results expected)";
+    } else {
+      interpretation += ` (SAV score: ${transitScore.score} - results may be moderate)`;
+    }
+
+    return {
+      name: tp.name,
+      currentRashi: tp.rashiName,
+      natalHouse,
+      isRetrograde: tp.isRetrograde,
+      ashtakavargaBindus: transitScore.score,
+      interpretation,
+    };
+  });
+
+  return {
+    date: now,
+    planets: transitPlanets,
+  };
 }
 
 export function calculateBirthChart(
@@ -336,6 +677,9 @@ export function calculateBirthChart(
     { name: "Rahu", fn: getRahuLongitude },
   ];
 
+  // Compute Sun longitude first for retrograde checks
+  const sunTropLon = getMeanSunLongitude(jd);
+
   const planets: PlanetPosition[] = tropicalPositions.map((p, index) => {
     const tropLon = p.fn(jd);
     const sidLon = normalize360(tropLon - ayanamsa);
@@ -343,6 +687,9 @@ export function calculateBirthChart(
     const degreesInRashi = sidLon - rashi * 30;
     const nakshatra = Math.floor(sidLon / (360 / 27));
     const nakshatraPada = Math.floor((sidLon % (360 / 27)) / (360 / 108)) + 1;
+
+    // Improved retrograde detection
+    const isRetrograde = detectRetrograde(p.name, tropLon, sunTropLon, jd);
 
     return {
       name: GRAHA_NAMES[index],
@@ -357,7 +704,7 @@ export function calculateBirthChart(
       nakshatraPada,
       isExalted: EXALTATION[p.name] === rashi,
       isDebilitated: DEBILITATION[p.name] === rashi,
-      isRetrograde: false, // Simplified
+      isRetrograde,
     };
   });
 
@@ -436,6 +783,10 @@ export function calculateBirthChart(
   // Calculate Planetary Aspects
   const aspects = calculatePlanetaryAspects(planets, ascRashi);
 
+  // Calculate Divisional Charts
+  const navamsa = calculateDivisionalChart(planets, sidAsc, 9, ayanamsa);
+  const dasamsa = calculateDivisionalChart(planets, sidAsc, 10, ayanamsa);
+
   return {
     ascendant,
     planets,
@@ -453,7 +804,83 @@ export function calculateBirthChart(
     specialLagnas,
     charaKarakas,
     aspects,
+    navamsa,
+    dasamsa,
   };
+}
+
+// Helper: get the Vimsottari lord sequence starting from a given lord
+function getVimsottariSequenceFrom(startLord: string): { lord: string; years: number }[] {
+  const startIdx = VIMSOTTARI_LORDS.findIndex((v) => v.lord === startLord);
+  const sequence: { lord: string; years: number }[] = [];
+  for (let i = 0; i < 9; i++) {
+    sequence.push(VIMSOTTARI_LORDS[(startIdx + i) % 9]);
+  }
+  return sequence;
+}
+
+// Helper: add fractional years to a date
+function addYearsToDate(date: Date, years: number): Date {
+  const result = new Date(date);
+  const totalDays = years * 365.25;
+  result.setTime(result.getTime() + totalDays * 24 * 60 * 60 * 1000);
+  return result;
+}
+
+// Calculate pratyantardasha (sub-sub-periods) for a given antardasha
+function calculatePratyantardashas(
+  antardashaLord: string,
+  antardashaYears: number,
+  startDate: Date
+): DashaPeriod[] {
+  const sequence = getVimsottariSequenceFrom(antardashaLord);
+  const pratyantardashas: DashaPeriod[] = [];
+  let currentDate = new Date(startDate);
+
+  for (const subLord of sequence) {
+    const pratyantarYears = (antardashaYears * subLord.years) / 120;
+    const endDate = addYearsToDate(currentDate, pratyantarYears);
+    pratyantardashas.push({
+      lord: subLord.lord,
+      startDate: new Date(currentDate),
+      endDate,
+      years: Math.round(pratyantarYears * 1000) / 1000,
+    });
+    currentDate = new Date(endDate);
+  }
+
+  return pratyantardashas;
+}
+
+// Calculate antardasha (sub-periods) for a given mahadasha
+function calculateAntardashas(
+  mahadashaLord: string,
+  mahadashaYears: number,
+  startDate: Date
+): DashaPeriod[] {
+  const sequence = getVimsottariSequenceFrom(mahadashaLord);
+  const antardashas: DashaPeriod[] = [];
+  let currentDate = new Date(startDate);
+
+  for (const subLord of sequence) {
+    const antarYears = (mahadashaYears * subLord.years) / 120;
+    const endDate = addYearsToDate(currentDate, antarYears);
+    const pratyantardashas = calculatePratyantardashas(
+      subLord.lord,
+      antarYears,
+      currentDate
+    );
+    antardashas.push({
+      lord: subLord.lord,
+      startDate: new Date(currentDate),
+      endDate,
+      years: Math.round(antarYears * 1000) / 1000,
+      antardashas: pratyantardashas,
+    });
+    currentDate = new Date(endDate);
+  }
+
+  return antardashas;
 }
 
 function calculateVimsottariDasha(
@@ -475,20 +902,15 @@ function calculateVimsottariDasha(
   let currentDate = new Date(birthDate);
 
   // First (partial) dasha
-  const firstEndDate = new Date(currentDate);
-  firstEndDate.setFullYear(
-    firstEndDate.getFullYear() + Math.floor(remainingYearsInFirst)
-  );
-  firstEndDate.setMonth(
-    firstEndDate.getMonth() +
-      Math.round((remainingYearsInFirst % 1) * 12)
-  );
+  const firstEndDate = addYearsToDate(currentDate, remainingYearsInFirst);
+  const firstYears = Math.round(remainingYearsInFirst * 10) / 10;
 
   dashas.push({
     lord: firstLord.lord,
     startDate: new Date(currentDate),
     endDate: firstEndDate,
-    years: Math.round(remainingYearsInFirst * 10) / 10,
+    years: firstYears,
+    antardashas: calculateAntardashas(firstLord.lord, firstYears, currentDate),
   });
   currentDate = new Date(firstEndDate);
 
@@ -496,14 +918,14 @@ function calculateVimsottariDasha(
   for (let i = 1; i <= 8; i++) {
     const lordIndex = (dashaLordIndex + i) % 9;
     const lord = VIMSOTTARI_LORDS[lordIndex];
-    const endDate = new Date(currentDate);
-    endDate.setFullYear(endDate.getFullYear() + lord.years);
+    const endDate = addYearsToDate(currentDate, lord.years);
 
     dashas.push({
       lord: lord.lord,
       startDate: new Date(currentDate),
       endDate: endDate,
       years: lord.years,
+      antardashas: calculateAntardashas(lord.lord, lord.years, currentDate),
     });
     currentDate = new Date(endDate);
   }

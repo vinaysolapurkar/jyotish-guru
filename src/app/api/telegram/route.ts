@@ -360,8 +360,28 @@ export async function POST(req: NextRequest) {
       // Generate pre-interpreted life themes
       const lifeThemes = generateLifeThemes(chart);
 
+      // Build antardasha timeline
+      const currentAntardasha = currentDasha?.antardashas?.find((a) => new Date() >= a.startDate && new Date() <= a.endDate);
+      const antardashaTimeline = currentDasha?.antardashas?.map((a) => {
+        const active = new Date() >= a.startDate && new Date() <= a.endDate;
+        return `${a.lord}: ${a.startDate.getFullYear()}-${String(a.startDate.getMonth()+1).padStart(2,'0')} to ${a.endDate.getFullYear()}-${String(a.endDate.getMonth()+1).padStart(2,'0')}${active ? ' <<< NOW' : ''}`;
+      }).join('\n') || 'N/A';
+
+      // Full dasha timeline with antardashas for ALL periods
+      const fullDashaTimeline = chart.vimsottariDasha.map((d) => {
+        const active = new Date() >= d.startDate && new Date() <= d.endDate;
+        const subs = d.antardashas?.map((a) => {
+          const subActive = new Date() >= a.startDate && new Date() <= a.endDate;
+          return `  ${a.lord}: ${a.startDate.getFullYear()}-${String(a.startDate.getMonth()+1).padStart(2,'0')} to ${a.endDate.getFullYear()}-${String(a.endDate.getMonth()+1).padStart(2,'0')}${subActive ? ' <<< NOW' : ''}`;
+        }).join('\n') || '';
+        return `${d.lord} Mahadasha: ${d.startDate.getFullYear()}-${d.endDate.getFullYear()}${active ? ' <<< CURRENT' : ''}\n${subs}`;
+      }).join('\n');
+
+      // Navamsa data
+      const navamsaStr = chart.navamsa ? `Navamsa Ascendant: ${chart.navamsa.ascendant.rashiName}\nNavamsa Planets: ${chart.navamsa.planets.map((p) => `${p.name}:${p.rashiName}`).join(', ')}` : 'N/A';
+
       chartHeader = `========================
-THE USER'S BIRTH CHART (ALREADY COMPUTED — USE THIS DIRECTLY)
+THE USER'S BIRTH CHART (COMPUTED USING NARASIMHA RAO'S METHODS)
 ========================
 Name: ${user.name}
 Born: ${user.birthDate} at ${user.birthTime}, ${user.birthPlace}
@@ -372,21 +392,36 @@ LIFE THEMES — USE THESE TO GIVE HELPFUL, SPECIFIC ANSWERS
 ${lifeThemes}
 
 ========================
-RAW CHART (for additional detail — never expose to user)
+DASHA TIMELINE WITH SUB-PERIODS (use for precise event timing)
+========================
+${fullDashaTimeline}
+
+Current: ${currentDasha?.lord || 'N/A'} Mahadasha > ${currentAntardasha?.lord || 'N/A'} Antardasha
+
+========================
+NAVAMSA (D-9) — Marriage & Soul Purpose chart
+========================
+${navamsaStr}
+
+========================
+RAW CHART DATA
 ========================
 Ascendant: ${chart.ascendant.rashiName}
 Sun: ${chart.sunSign} | Moon: ${chart.moonSign}
-Current Period: ${currentDasha?.lord || "N/A"} ${currentDasha ? `(${new Date(currentDasha.startDate).getFullYear()}-${new Date(currentDasha.endDate).getFullYear()})` : ""}
-Planets: ${chart.planets.map(p => `${p.name}:${p.rashiName}${p.isExalted ? "[E]" : ""}${p.isDebilitated ? "[D]" : ""}`).join(", ")}
+Planets: ${chart.planets.map(p => `${p.name}:${p.rashiName}${p.isExalted ? "[E]" : ""}${p.isDebilitated ? "[D]" : ""}${p.isRetrograde ? "[R]" : ""}`).join(", ")}
 Yogas: ${chart.yogas.slice(0, 8).map(y => y.split(":")[0]).join(", ")}
 
 ========================
-CRITICAL RULES:
-- NEVER ASK for birth details — they're above.
-- PRIORITIZE the LIFE THEMES section for your answers.
-- Never expose chart data (planet names, signs, houses) to the user.
+CRITICAL RULES FOR TIMING PREDICTIONS:
+- Use the DASHA + ANTARDASHA timeline above for specific event timing
+- Marriage: check 7th lord dasha/antardasha + Navamsa 7th lord
+- Career: check 10th lord dasha/antardasha
+- For "when" questions: find the relevant planet's antardasha period and give SPECIFIC year ranges
+- NEVER guess timing — compute it from the dasha table above
+- Never expose chart jargon to the user — translate to plain life language
 ========================
 `;
+
 
     } catch {}
 
