@@ -509,10 +509,25 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
         const navLord7 = chart.navamsa ? RL[((chart.navamsa.ascendant.rashi ?? 0) + 6) % 12] : "";
         const marriageSignificators = new Set([lord7name, "Venus", dk, navLord7, ...planetsIn7].filter(Boolean));
 
+        // Also check if mahadasha lord is CONJUNCT a marriage significator (same rashi)
+        const conjunctMDLords = new Set<string>();
+        for (const sig of marriageSignificators) {
+          const sigPlanet = chart.planets.find(p => p.name === sig);
+          if (sigPlanet) {
+            for (const p of chart.planets) {
+              if (p.name !== sig && p.rashi === sigPlanet.rashi) {
+                conjunctMDLords.add(p.name);
+              }
+            }
+          }
+        }
+
         const windows: string[] = [];
         for (const md of chart.vimsottariDasha) {
+          // Include ALL antardashas if mahadasha lord is a marriage significator OR conjunct one
+          const mdIsRelevant = marriageSignificators.has(md.lord) || conjunctMDLords.has(md.lord);
           for (const ad of md.antardashas || []) {
-            if (marriageSignificators.has(ad.lord) || marriageSignificators.has(md.lord)) {
+            if (mdIsRelevant || marriageSignificators.has(ad.lord) || conjunctMDLords.has(ad.lord)) {
               const yr = ad.startDate.getFullYear();
               if (yr >= 2001 && yr <= 2035) {
                 const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
