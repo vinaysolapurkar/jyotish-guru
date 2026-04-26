@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { VEDIC_ASTROLOGY_SYSTEM_PROMPT, generateLifeThemes } from "@/lib/system-prompt";
-import { calculateBirthChart } from "@/lib/astrology";
+import { calculateBirthChart, BirthChartData } from "@/lib/astrology";
 
 const FREE_MESSAGES_PER_DAY = 5;
 const ADMIN_TELEGRAM_IDS = ["1923935459"]; // Vinay — app owner
@@ -180,6 +180,227 @@ Key Patterns: ${topYogas || "balanced configuration"}`;
   } catch {
     await sendTelegramMessage(chatId, "Something went off with the calculation. Mind trying again? Type /reset to start fresh.");
   }
+}
+
+const RASHI_LORDS = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
+
+function runChartComputation(type: string, chart: BirthChartData, ascRashi: number): string {
+  const RL = RASHI_LORDS;
+  const getHouse = (r: number) => ((r - ascRashi + 12) % 12) + 1;
+
+  if (type === "marriage_timing") {
+    const lord7name = RL[(ascRashi + 6) % 12];
+    const house7rashi = (ascRashi + 6) % 12;
+    const planetsIn7 = chart.planets.filter(p => p.rashi === house7rashi).map(p => p.name);
+    const dk = chart.charaKarakas?.find(ck => ck.karaka === "Darakaraka")?.planet || "";
+    const navLord7 = chart.navamsa ? RL[((chart.navamsa.ascendant.rashi ?? 0) + 6) % 12] : "";
+    const marriageSignificators = new Set([lord7name, "Venus", dk, navLord7, ...planetsIn7].filter(Boolean));
+
+    const conjunctMDLords = new Set<string>();
+    for (const sig of marriageSignificators) {
+      const sigPlanet = chart.planets.find(p => p.name === sig);
+      if (sigPlanet) {
+        for (const p of chart.planets) {
+          if (p.name !== sig && p.rashi === sigPlanet.rashi) conjunctMDLords.add(p.name);
+        }
+      }
+    }
+
+    const windows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      const mdIsRelevant = marriageSignificators.has(md.lord) || conjunctMDLords.has(md.lord);
+      for (const ad of md.antardashas || []) {
+        if (mdIsRelevant || marriageSignificators.has(ad.lord) || conjunctMDLords.has(ad.lord)) {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 2001 && yr <= 2035) {
+            const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+            const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+            windows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+          }
+        }
+      }
+    }
+    return `Marriage windows from 7th lord (${lord7name}), Venus, DK (${dk}), Navamsa 7th lord (${navLord7}), planets in 7th (${planetsIn7.join(",") || "none"}): ${windows.join("; ")}`;
+  }
+
+  if (type === "career_timing") {
+    const lord10name = RL[(ascRashi + 9) % 12];
+    const mars = chart.planets.find(p => p.name === "Mars")!;
+    const sun = chart.planets.find(p => p.name === "Sun")!;
+    const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
+    const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
+    const careerWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (ad.lord === lord10name || ad.lord === "Sun") {
+          careerWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+        }
+      }
+    }
+    return `10th lord: ${lord10name}. Mars in house ${getHouse(mars.rashi)}${mars.isExalted ? " (exalted)" : ""}. Sun in house ${getHouse(sun.rashi)}. Current: ${currentDasha?.lord}-${currentAD?.lord} (until ${currentAD?.endDate.getFullYear()}). Career windows: ${careerWindows.slice(0, 6).join("; ")}`;
+  }
+
+  if (type === "children_timing") {
+    const lord5name = RL[(ascRashi + 4) % 12];
+    const childWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (ad.lord === lord5name || ad.lord === "Jupiter") {
+          childWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+        }
+      }
+    }
+    return `5th lord: ${lord5name}. Children windows: ${childWindows.slice(0, 6).join("; ")}`;
+  }
+
+  if (type === "difficult_periods") {
+    const lord8name = RL[(ascRashi + 7) % 12];
+    const lord6name = RL[(ascRashi + 5) % 12];
+    const lord12name = RL[(ascRashi + 11) % 12];
+    const difficultSignificators = new Set([lord8name, lord6name, lord12name, "Saturn", "Rahu", "Ketu"]);
+    const diffWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (difficultSignificators.has(ad.lord) && difficultSignificators.has(md.lord)) {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 1983 && yr <= 2045) {
+            const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+            const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+            diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e} (INTENSE)`);
+          }
+        } else if (difficultSignificators.has(ad.lord) || difficultSignificators.has(md.lord)) {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 1983 && yr <= 2045) {
+            const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+            const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+            diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+          }
+        }
+      }
+    }
+    return `Difficult periods from 8th lord (${lord8name}), 6th lord (${lord6name}), 12th lord (${lord12name}), Saturn, Rahu, Ketu. Windows (INTENSE = both lords difficult): ${diffWindows.slice(0, 15).join("; ")}`;
+  }
+
+  if (type === "wealth_periods") {
+    const lord2name = RL[(ascRashi + 1) % 12];
+    const lord11name = RL[(ascRashi + 10) % 12];
+    const wealthSignificators = new Set([lord2name, lord11name, "Jupiter"]);
+    const wealthWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (wealthSignificators.has(ad.lord) || wealthSignificators.has(md.lord)) {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 2001 && yr <= 2045) {
+            const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+            const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+            wealthWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+          }
+        }
+      }
+    }
+    return `Wealth periods from 2nd lord (${lord2name}), 11th lord (${lord11name}), Jupiter: ${wealthWindows.slice(0, 10).join("; ")}`;
+  }
+
+  if (type === "current_period") {
+    const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
+    const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
+    const nextAD = currentDasha?.antardashas?.find(a => a.startDate > new Date());
+    return `Current: ${currentDasha?.lord} mahadasha (${currentDasha?.startDate.getFullYear()}-${currentDasha?.endDate.getFullYear()}) with ${currentAD?.lord} sub-period (until ${currentAD?.endDate.getFullYear()}-${String((currentAD?.endDate.getMonth() ?? 0)+1).padStart(2,'0')}). Next sub-period: ${nextAD?.lord} (${nextAD?.startDate.getFullYear()}-${nextAD?.endDate.getFullYear()})`;
+  }
+
+  if (type === "personality") {
+    const moon = chart.planets.find(p => p.name === "Moon")!;
+    return `Ascendant ${chart.ascendant.rashiName}, Moon in ${moon.rashiName} (${moon.nakshatraName})${moon.isExalted ? " EXALTED" : ""}. ${chart.yogas.length} yogas including: ${chart.yogas.slice(0,4).map(y => y.split(":")[0]).join(", ")}. Planets: ${chart.planets.map(p => `${p.name} in ${p.rashiName} (house ${getHouse(p.rashi)})${p.isExalted ? "[E]" : ""}${p.isDebilitated ? "[D]" : ""}${p.isRetrograde ? "[R]" : ""}`).join(", ")}`;
+  }
+
+  if (type === "health") {
+    const lord6name = RL[(ascRashi + 5) % 12];
+    const lord8name = RL[(ascRashi + 7) % 12];
+    const house6rashi = (ascRashi + 5) % 12;
+    const house8rashi = (ascRashi + 7) % 12;
+    const planetsIn6 = chart.planets.filter(p => p.rashi === house6rashi).map(p => p.name);
+    const planetsIn8 = chart.planets.filter(p => p.rashi === house8rashi).map(p => p.name);
+    const ascLord = RL[ascRashi];
+    const ascLordPlanet = chart.planets.find(p => p.name === ascLord);
+    const bodyParts = ["Head", "Face/throat", "Arms/shoulders", "Chest/lungs", "Heart/stomach", "Intestines/digestion", "Lower abdomen/kidneys", "Reproductive organs", "Thighs/hips", "Knees/joints", "Calves/ankles", "Feet/immune system"];
+    const weakAreas = [bodyParts[ascRashi], bodyParts[(ascRashi + 5) % 12], bodyParts[(ascRashi + 7) % 12]].filter(Boolean);
+    return `6th lord: ${lord6name}, 8th lord: ${lord8name}. Planets in 6th: ${planetsIn6.join(",") || "none"}. Planets in 8th: ${planetsIn8.join(",") || "none"}. Ascendant lord (${ascLord}) in house ${getHouse(ascLordPlanet?.rashi ?? 0)}. Body areas to watch: ${weakAreas.join(", ")}. Constitution based on ascendant ${chart.ascendant.rashiName}.`;
+  }
+
+  if (type === "education") {
+    const lord4name = RL[(ascRashi + 3) % 12];
+    const lord5name = RL[(ascRashi + 4) % 12];
+    const mercury = chart.planets.find(p => p.name === "Mercury")!;
+    const jupiter = chart.planets.find(p => p.name === "Jupiter")!;
+    const eduWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (ad.lord === lord4name || ad.lord === lord5name || ad.lord === "Mercury" || ad.lord === "Jupiter") {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 1990 && yr <= 2040) {
+            eduWindows.push(`${md.lord}-${ad.lord}: ${yr} to ${ad.endDate.getFullYear()}`);
+          }
+        }
+      }
+    }
+    return `4th lord: ${lord4name}, 5th lord: ${lord5name}. Mercury in house ${getHouse(mercury.rashi)}${mercury.isExalted ? "[E]" : ""}. Jupiter in house ${getHouse(jupiter.rashi)}${jupiter.isExalted ? "[E]" : ""}. Education/learning windows: ${eduWindows.slice(0, 8).join("; ")}`;
+  }
+
+  if (type === "travel_foreign") {
+    const lord9name = RL[(ascRashi + 8) % 12];
+    const lord12name = RL[(ascRashi + 11) % 12];
+    const rahu = chart.planets.find(p => p.name === "Rahu");
+    const travelWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (ad.lord === lord9name || ad.lord === lord12name || ad.lord === "Rahu" || md.lord === "Rahu") {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 1990 && yr <= 2045) {
+            travelWindows.push(`${md.lord}-${ad.lord}: ${yr} to ${ad.endDate.getFullYear()}`);
+          }
+        }
+      }
+    }
+    return `9th lord: ${lord9name}, 12th lord: ${lord12name}. Rahu in house ${rahu ? getHouse(rahu.rashi) : "N/A"}. Travel/foreign windows: ${travelWindows.slice(0, 10).join("; ")}`;
+  }
+
+  if (type === "spiritual") {
+    const lord12name = RL[(ascRashi + 11) % 12];
+    const ketu = chart.planets.find(p => p.name === "Ketu");
+    const jupiter = chart.planets.find(p => p.name === "Jupiter")!;
+    const house12rashi = (ascRashi + 11) % 12;
+    const planetsIn12 = chart.planets.filter(p => p.rashi === house12rashi).map(p => p.name);
+    const spiritualWindows: string[] = [];
+    for (const md of chart.vimsottariDasha) {
+      for (const ad of md.antardashas || []) {
+        if (ad.lord === "Ketu" || ad.lord === lord12name || ad.lord === "Jupiter" || md.lord === "Ketu") {
+          const yr = ad.startDate.getFullYear();
+          if (yr >= 1990 && yr <= 2045) {
+            spiritualWindows.push(`${md.lord}-${ad.lord}: ${yr} to ${ad.endDate.getFullYear()}`);
+          }
+        }
+      }
+    }
+    return `12th lord: ${lord12name}. Ketu in house ${ketu ? getHouse(ketu.rashi) : "N/A"}. Jupiter in house ${getHouse(jupiter.rashi)}. Planets in 12th: ${planetsIn12.join(",") || "none"}. Spiritual/moksha windows: ${spiritualWindows.slice(0, 10).join("; ")}`;
+  }
+
+  if (type === "full_dasha_timeline") {
+    return chart.vimsottariDasha.map((d) => {
+      const active = new Date() >= d.startDate && new Date() <= d.endDate;
+      const subs = d.antardashas?.map((a) => {
+        const subActive = new Date() >= a.startDate && new Date() <= a.endDate;
+        return `  ${a.lord}: ${a.startDate.getFullYear()}-${String(a.startDate.getMonth()+1).padStart(2,'0')} to ${a.endDate.getFullYear()}-${String(a.endDate.getMonth()+1).padStart(2,'0')}${subActive ? ' <<< NOW' : ''}`;
+      }).join('\n') || '';
+      return `${d.lord} Mahadasha: ${d.startDate.getFullYear()}-${d.endDate.getFullYear()}${active ? ' <<< CURRENT' : ''}\n${subs}`;
+    }).join('\n');
+  }
+
+  if (type === "general") {
+    const lifeThemes = generateLifeThemes(chart);
+    return lifeThemes;
+  }
+
+  return generateLifeThemes(chart);
 }
 
 export async function POST(req: NextRequest) {
@@ -488,157 +709,8 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
       content: m.content,
     }));
 
-    // === COMPUTE-FIRST QUERY DETECTION ===
-    // Detect specific questions and compute answers from chart data BEFORE calling AI
+    // === TWO-PASS AI ARCHITECTURE ===
     const actualQuestion = text.startsWith("/debug ") || text.startsWith("/prompt ") ? text.replace(/^\/(debug|prompt)\s+/, "") : text;
-    const lc = actualQuestion.toLowerCase();
-    let computedAnswer = "";
-
-    try {
-      const chart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
-      const ascR = chart.ascendant.rashi ?? 0;
-      const RL = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
-      const getHouse = (r: number) => ((r - ascR + 12) % 12) + 1;
-
-      // Marriage question — comprehensive detection using multiple significators
-      if (lc.includes("marr") || lc.includes("wife") || lc.includes("husband") || lc.includes("spouse") || lc.includes("wedding") || lc.includes("shaadi")) {
-        const lord7name = RL[(ascR + 6) % 12];
-        const house7rashi = (ascR + 6) % 12;
-        const planetsIn7 = chart.planets.filter(p => p.rashi === house7rashi).map(p => p.name);
-        const dk = chart.charaKarakas?.find(ck => ck.karaka === "Darakaraka")?.planet || "";
-        const navLord7 = chart.navamsa ? RL[((chart.navamsa.ascendant.rashi ?? 0) + 6) % 12] : "";
-        const marriageSignificators = new Set([lord7name, "Venus", dk, navLord7, ...planetsIn7].filter(Boolean));
-
-        // Also check if mahadasha lord is CONJUNCT a marriage significator (same rashi)
-        const conjunctMDLords = new Set<string>();
-        for (const sig of marriageSignificators) {
-          const sigPlanet = chart.planets.find(p => p.name === sig);
-          if (sigPlanet) {
-            for (const p of chart.planets) {
-              if (p.name !== sig && p.rashi === sigPlanet.rashi) {
-                conjunctMDLords.add(p.name);
-              }
-            }
-          }
-        }
-
-        const windows: string[] = [];
-        for (const md of chart.vimsottariDasha) {
-          // Include ALL antardashas if mahadasha lord is a marriage significator OR conjunct one
-          const mdIsRelevant = marriageSignificators.has(md.lord) || conjunctMDLords.has(md.lord);
-          for (const ad of md.antardashas || []) {
-            if (mdIsRelevant || marriageSignificators.has(ad.lord) || conjunctMDLords.has(ad.lord)) {
-              const yr = ad.startDate.getFullYear();
-              if (yr >= 2001 && yr <= 2035) {
-                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
-                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
-                windows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
-              }
-            }
-          }
-        }
-        const venus = chart.planets.find(p => p.name === "Venus")!;
-        computedAnswer = `COMPUTED ANSWER: Marriage windows computed from 7th lord (${lord7name}), Venus, Darakaraka (${dk}), Navamsa 7th lord (${navLord7}), planets in 7th house (${planetsIn7.join(",") || "none"}): ${windows.join("; ")}. State ALL these windows. Ask "which of these periods matches?" DO NOT assume unmarried.`;
-      }
-
-      // Career question
-      if (lc.includes("career") || lc.includes("job") || lc.includes("work") || lc.includes("business") || lc.includes("profession")) {
-        const lord10name = RL[(ascR + 9) % 12];
-        const mars = chart.planets.find(p => p.name === "Mars")!;
-        const sun = chart.planets.find(p => p.name === "Sun")!;
-        const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
-        const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
-        const careerWindows: string[] = [];
-        for (const md of chart.vimsottariDasha) {
-          for (const ad of md.antardashas || []) {
-            if (ad.lord === lord10name || ad.lord === "Sun") {
-              careerWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
-            }
-          }
-        }
-        computedAnswer = `COMPUTED ANSWER (say this warmly): Mars is in house ${getHouse(mars.rashi)}${mars.isExalted ? " (very strong)" : ""}. Sun in house ${getHouse(sun.rashi)}. Current period: ${currentDasha?.lord}-${currentAD?.lord} (until ${currentAD?.endDate.getFullYear()}). Career change windows: ${careerWindows.slice(0, 6).join("; ")}. Tell the person about their career energy and timing based on these COMPUTED facts.`;
-      }
-
-      // Children question
-      if (lc.includes("child") || lc.includes("baby") || lc.includes("son") || lc.includes("daughter") || lc.includes("pregnant") || lc.includes("kids")) {
-        const lord5name = RL[(ascR + 4) % 12];
-        const childWindows: string[] = [];
-        for (const md of chart.vimsottariDasha) {
-          for (const ad of md.antardashas || []) {
-            if (ad.lord === lord5name || ad.lord === "Jupiter") {
-              childWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
-            }
-          }
-        }
-        computedAnswer = `COMPUTED ANSWER (say this warmly): Children-related windows: ${childWindows.slice(0, 6).join("; ")}. State these computed dates. DO NOT make up other dates.`;
-      }
-
-      // Current period / what's happening now
-      if (lc.includes("what's happening") || lc.includes("current") || lc.includes("right now") || lc.includes("this year") || lc.includes("this period")) {
-        const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
-        const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
-        const nextAD = currentDasha?.antardashas?.find(a => a.startDate > new Date());
-        computedAnswer = `COMPUTED ANSWER: Current period is ${currentDasha?.lord} mahadasha (${currentDasha?.startDate.getFullYear()}-${currentDasha?.endDate.getFullYear()}) with ${currentAD?.lord} sub-period (until ${currentAD?.endDate.getFullYear()}-${String((currentAD?.endDate.getMonth() ?? 0)+1).padStart(2,'0')}). Next sub-period: ${nextAD?.lord} (${nextAD?.startDate.getFullYear()}-${nextAD?.endDate.getFullYear()}). Describe what this means for their life in plain language.`;
-      }
-
-      // Loss / setback / difficulty / health question
-      if (lc.includes("loss") || lc.includes("fail") || lc.includes("difficult") || lc.includes("setback") || lc.includes("problem") || lc.includes("health") || lc.includes("accident") || lc.includes("worst") || lc.includes("bad time") || lc.includes("tough") || lc.includes("struggle") || lc.includes("crisis")) {
-        const lord8name = RL[(ascR + 7) % 12]; // 8th lord — obstacles, transformation
-        const lord6name = RL[(ascR + 5) % 12]; // 6th lord — enemies, debts, health
-        const lord12name = RL[(ascR + 11) % 12]; // 12th lord — losses, expenses
-        const difficultSignificators = new Set([lord8name, lord6name, lord12name, "Saturn", "Rahu", "Ketu"]);
-
-        const diffWindows: string[] = [];
-        for (const md of chart.vimsottariDasha) {
-          for (const ad of md.antardashas || []) {
-            if (difficultSignificators.has(ad.lord) && difficultSignificators.has(md.lord)) {
-              // BOTH mahadasha AND antardasha lords are difficult = most challenging period
-              const yr = ad.startDate.getFullYear();
-              if (yr >= 1983 && yr <= 2045) {
-                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
-                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
-                diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e} (INTENSE)`);
-              }
-            } else if (difficultSignificators.has(ad.lord) || difficultSignificators.has(md.lord)) {
-              const yr = ad.startDate.getFullYear();
-              if (yr >= 1983 && yr <= 2045) {
-                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
-                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
-                diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
-              }
-            }
-          }
-        }
-        computedAnswer = `COMPUTED ANSWER: Difficult/challenging periods computed from 8th lord (${lord8name}), 6th lord (${lord6name}), 12th lord (${lord12name}), Saturn, Rahu, Ketu periods. Most challenging windows (marked INTENSE = both lords difficult): ${diffWindows.slice(0, 15).join("; ")}. State the windows and ask "which period matches your experience?" DO NOT assume what happened — just present the timing.`;
-      }
-
-      // Money / wealth / financial question
-      if (lc.includes("money") || lc.includes("wealth") || lc.includes("financ") || lc.includes("income") || lc.includes("rich") || lc.includes("earn") || lc.includes("salary")) {
-        const lord2name = RL[(ascR + 1) % 12]; // 2nd lord — accumulated wealth
-        const lord11name = RL[(ascR + 10) % 12]; // 11th lord — gains, income
-        const wealthSignificators = new Set([lord2name, lord11name, "Jupiter"]);
-        const wealthWindows: string[] = [];
-        for (const md of chart.vimsottariDasha) {
-          for (const ad of md.antardashas || []) {
-            if (wealthSignificators.has(ad.lord) || wealthSignificators.has(md.lord)) {
-              const yr = ad.startDate.getFullYear();
-              if (yr >= 2001 && yr <= 2045) {
-                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
-                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
-                wealthWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
-              }
-            }
-          }
-        }
-        computedAnswer = `COMPUTED ANSWER: Wealth/income growth periods from 2nd lord (${lord2name}), 11th lord (${lord11name}), Jupiter: ${wealthWindows.slice(0, 10).join("; ")}. State these windows for financial growth.`;
-      }
-
-      // Personality / tell me about myself
-      if (lc.includes("about me") || lc.includes("about myself") || lc.includes("personality") || lc.includes("who am i")) {
-        const moon = chart.planets.find(p => p.name === "Moon")!;
-        computedAnswer = `COMPUTED ANSWER: Ascendant ${chart.ascendant.rashiName}, Moon in ${moon.rashiName} (${moon.nakshatraName})${moon.isExalted ? " EXALTED" : ""}. ${chart.yogas.length} yogas including: ${chart.yogas.slice(0,4).map(y => y.split(":")[0]).join(", ")}. Describe their personality based on these SPECIFIC chart factors. Be concrete and personal.`;
-      }
-    } catch {}
 
     const modeContext = displayMode === "technical"
       ? "\n\n[TECHNICAL MODE] You may use Sanskrit terminology like Rashi, Nakshatra, Dasha, Yoga. Still keep the tone conversational."
@@ -646,43 +718,97 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
 
     const telegramTone = "\n\nYou are chatting on Telegram. Keep messages warm, personal, conversational. NO markdown (no **, no *, no #, no bullets). Short paragraphs like a friend talking, not a report.";
 
-    // If we have a computed answer, override the system prompt to force the AI to use it
-    const computeOverride = computedAnswer ? `
-!!!!! MANDATORY INSTRUCTION — READ THIS FIRST !!!!!
-${computedAnswer}
+    // --- PASS 1: Ask DeepSeek which computations to run ---
+    const routerSystemPrompt = `You are a Vedic astrology computation router. Given a user's question, decide which computation(s) to run from the birth chart.
 
-YOUR ENTIRE RESPONSE MUST BE BASED ON THE COMPUTED DATES ABOVE.
-- State the dates from the computed answer
-- Do NOT use any other dates
-- Do NOT say "you haven't married" or make assumptions about the user's life
-- Simply say "your chart shows the strongest window was [dates from above]"
-- Keep it to 2-3 short paragraphs
-- Ask "does this match?" at the end
-!!!!! END MANDATORY INSTRUCTION !!!!!
+Available computations:
+- marriage_timing: When marriage happened or will happen
+- career_timing: Career changes, job timing, professional growth
+- children_timing: When children were born or will be born
+- difficult_periods: Loss, setbacks, health issues, failures, accidents
+- wealth_periods: Money, income growth, financial gains
+- current_period: What's happening right now in their life
+- personality: Who they are, their nature, strengths
+- health: Health issues, body constitution, medical timing
+- education: Studies, learning, academic achievements
+- travel_foreign: Foreign travel, relocation, abroad connections
+- spiritual: Spiritual growth, meditation, enlightenment timing
+- full_dasha_timeline: Complete life timeline with all periods
+- general: General life overview
 
-` : "";
+Return ONLY a JSON object: {"computations": ["type1", "type2"]}
+Nothing else. No explanation. Just the JSON.`;
 
-    // COMPUTED ANSWER goes FIRST — before everything else — so the AI sees it immediately
-    const fullSystemPrompt = computeOverride + chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone;
+    let computationTypes: string[] = ["general"];
+    try {
+      const pass1Response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: routerSystemPrompt },
+            { role: "user", content: actualQuestion },
+          ],
+          max_tokens: 100,
+          temperature: 0.1,
+        }),
+      });
+      if (pass1Response.ok) {
+        const pass1Data = await pass1Response.json();
+        const pass1Content = pass1Data.choices?.[0]?.message?.content || "";
+        // Extract JSON from the response (handle markdown code blocks too)
+        const jsonMatch = pass1Content.match(/\{[\s\S]*"computations"[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed.computations) && parsed.computations.length > 0) {
+            computationTypes = parsed.computations;
+          }
+        }
+      }
+    } catch {
+      // Fall back to ["general"] on any error
+      computationTypes = ["general"];
+    }
 
-    // DEBUG MODE — admin can see the exact prompt being sent
+    // --- RUN COMPUTATIONS ---
+    let computedResults = "";
+    try {
+      const chart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
+      const ascR = chart.ascendant.rashi ?? 0;
+      const results: string[] = [];
+      for (const compType of computationTypes) {
+        try {
+          const result = runChartComputation(compType, chart, ascR);
+          results.push(`[${compType.toUpperCase()}]\n${result}`);
+        } catch {
+          results.push(`[${compType.toUpperCase()}]\n(computation failed)`);
+        }
+      }
+      computedResults = results.join("\n\n");
+    } catch {
+      computedResults = "(chart computation failed — answer generally)";
+    }
+
+    // --- DEBUG MODE — admin can see the two-pass flow ---
     if (isAdmin && (text.startsWith("/debug ") || text.startsWith("/prompt "))) {
-      const userQ = text.replace(/^\/(debug|prompt)\s+/, "");
-      // Show what would be sent to DeepSeek
       const debugOutput = [
-        "=== SYSTEM PROMPT (truncated) ===",
-        fullSystemPrompt.slice(0, 3500),
+        "=== PASS 1: COMPUTATION ROUTER ===",
+        `Question: ${actualQuestion}`,
+        `Selected computations: ${JSON.stringify(computationTypes)}`,
         "",
-        "=== COMPUTED ANSWER ===",
-        computedAnswer || "(none — general question)",
+        "=== COMPUTED RESULTS ===",
+        computedResults.slice(0, 2500),
         "",
-        "=== USER QUESTION ===",
-        userQ,
+        "=== CHART HEADER (truncated) ===",
+        chartHeader.slice(0, 1500),
         "",
         "=== CONVERSATION HISTORY ===",
         history.map(m => `${m.role}: ${m.content.slice(0, 100)}`).join("\n"),
       ].join("\n");
-      // Split into chunks for Telegram
       const chunks = [];
       for (let i = 0; i < debugOutput.length; i += 4000) {
         chunks.push(debugOutput.slice(i, i + 4000));
@@ -693,6 +819,23 @@ YOUR ENTIRE RESPONSE MUST BE BASED ON THE COMPUTED DATES ABOVE.
       return NextResponse.json({ ok: true });
     }
 
+    // --- PASS 2: Interpretation ---
+    const pass2SystemPrompt = `${chartHeader}${VEDIC_ASTROLOGY_SYSTEM_PROMPT}${modeContext}${telegramTone}
+
+========================
+COMPUTED RESULTS FROM THE VEDIC CALCULATION ENGINE:
+========================
+${computedResults}
+========================
+
+Based on these COMPUTED results, answer the user's question warmly in plain English.
+- Use ONLY the dates and facts from the computed results above
+- Do NOT make up any dates or facts
+- Do NOT say "you haven't married" or make assumptions about the user's life
+- For past events, present the timing windows and ask "does this match your experience?"
+- Keep it to 2-4 short paragraphs
+- No astrology jargon (unless technical mode)`;
+
     const deepseekResponse = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
@@ -702,12 +845,12 @@ YOUR ENTIRE RESPONSE MUST BE BASED ON THE COMPUTED DATES ABOVE.
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [
-          { role: "system", content: fullSystemPrompt },
+          { role: "system", content: pass2SystemPrompt },
           ...history,
           { role: "user", content: text },
         ],
         max_tokens: 1000,
-        temperature: computedAnswer ? 0.3 : 0.8, // Lower temp when we have computed answer — less creative, more obedient
+        temperature: 0.4,
       }),
     });
 
