@@ -42,7 +42,11 @@ async function askDeepSeek(system: string, user: string, maxTokens = 800, temper
         temperature,
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("OpenAI API error:", res.status, errText);
+      return null;
+    }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch { return null; }
@@ -326,7 +330,7 @@ export async function POST(req: NextRequest) {
     const userContent = history ? `Recent conversation:\n${history}\n\nCurrent question: ${text}` : text;
 
     const reply = await askDeepSeek(systemPrompt, userContent, 800, 0.3);
-    const response = reply || "I had trouble processing that. Could you try asking in a different way?";
+    const response = reply || `I had trouble connecting to the AI service. [Debug: API key ${process.env.OPENAI_API_KEY ? "present (" + process.env.OPENAI_API_KEY.slice(0,10) + "...)" : "MISSING"}]`;
 
     // Save response and increment count
     await prisma.message.create({ data: { userId: user.id, role: "assistant", content: response } });
