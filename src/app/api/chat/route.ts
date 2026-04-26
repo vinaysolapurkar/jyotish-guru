@@ -170,17 +170,17 @@ CRITICAL RULES:
       ? "\n\n[DISPLAY MODE: TECHNICAL] The user is an astrology enthusiast. You may use proper Sanskrit terminology (Rashi, Nakshatra, Dasha, Yoga, Graha, Bhava, etc.) and include degree positions. Still keep the tone conversational and human, but you can reference chart details directly."
       : "\n\n[DISPLAY MODE: SIMPLE — STRICTLY ENFORCED] Zero astrology jargon. Zero planet names. Zero Sanskrit. The user has no idea what a Mahadasha or Rahu or 10th house means — and they don't want to know. Talk ONLY about their real life: career, relationships, money, health, family, decisions. You're a wise friend giving life advice, not an astrologer giving a reading. If you catch yourself about to write any astrology term, delete it and rephrase as a plain life insight.";
 
-    // Call DeepSeek API
+    // Call OpenAI API
     const deepseekResponse = await fetch(
-      "https://api.deepseek.com/chat/completions",
+      "https://api.openai.com/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "gpt-4o-mini",
           messages: [
             {
               role: "system",

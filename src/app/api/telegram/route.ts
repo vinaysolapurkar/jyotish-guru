@@ -32,11 +32,11 @@ function sendTyping(chatId: string) {
 // --- DeepSeek (single call) ---
 async function askDeepSeek(system: string, user: string, maxTokens = 800, temperature = 0.3): Promise<string | null> {
   try {
-    const res = await fetch("https://api.deepseek.com/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "gpt-4o-mini",
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature,
