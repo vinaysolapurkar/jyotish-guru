@@ -380,6 +380,32 @@ export async function POST(req: NextRequest) {
       // Navamsa data
       const navamsaStr = chart.navamsa ? `Navamsa Ascendant: ${chart.navamsa.ascendant.rashiName}\nNavamsa Planets: ${chart.navamsa.planets.map((p) => `${p.name}:${p.rashiName}`).join(', ')}` : 'N/A';
 
+      // Pre-compute key event timings server-side
+      const ascRashi = chart.ascendant.rashi ?? 0;
+      const RASHI_LORDS = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
+      const lord7 = RASHI_LORDS[(ascRashi + 6) % 12]; // 7th house lord = marriage
+      const lord10 = RASHI_LORDS[(ascRashi + 9) % 12]; // 10th house lord = career
+      const lord5 = RASHI_LORDS[(ascRashi + 4) % 12]; // 5th house lord = children
+
+      // Find all antardashas of the 7th lord (marriage timing)
+      const marriageWindows: string[] = [];
+      const careerWindows: string[] = [];
+      const childrenWindows: string[] = [];
+      for (const md of chart.vimsottariDasha) {
+        for (const ad of md.antardashas || []) {
+          const range = `${ad.startDate.getFullYear()}-${String(ad.startDate.getMonth()+1).padStart(2,'0')} to ${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+          if (ad.lord === lord7 || ad.lord === "Venus" || md.lord === lord7) {
+            marriageWindows.push(`${md.lord}-${ad.lord}: ${range}`);
+          }
+          if (ad.lord === lord10 || ad.lord === "Sun" || md.lord === lord10) {
+            careerWindows.push(`${md.lord}-${ad.lord}: ${range}`);
+          }
+          if (ad.lord === lord5 || ad.lord === "Jupiter" || md.lord === lord5) {
+            childrenWindows.push(`${md.lord}-${ad.lord}: ${range}`);
+          }
+        }
+      }
+
       chartHeader = `========================
 THE USER'S BIRTH CHART (COMPUTED USING NARASIMHA RAO'S METHODS)
 ========================
@@ -392,11 +418,18 @@ LIFE THEMES — USE THESE TO GIVE HELPFUL, SPECIFIC ANSWERS
 ${lifeThemes}
 
 ========================
-DASHA TIMELINE WITH SUB-PERIODS (use for precise event timing)
+PRE-COMPUTED EVENT TIMING (USE THESE EXACT DATES — DO NOT MAKE UP YOUR OWN)
 ========================
-${fullDashaTimeline}
+MARRIAGE WINDOWS (7th lord = ${lord7}, Venus periods):
+${marriageWindows.slice(0, 10).join('\n')}
 
-Current: ${currentDasha?.lord || 'N/A'} Mahadasha > ${currentAntardasha?.lord || 'N/A'} Antardasha
+CAREER CHANGE WINDOWS (10th lord = ${lord10}, Sun periods):
+${careerWindows.slice(0, 10).join('\n')}
+
+CHILDREN WINDOWS (5th lord = ${lord5}, Jupiter periods):
+${childrenWindows.slice(0, 10).join('\n')}
+
+CURRENT PERIOD: ${currentDasha?.lord || 'N/A'} Mahadasha > ${currentAntardasha?.lord || 'N/A'} Antardasha
 
 ========================
 NAVAMSA (D-9) — Marriage & Soul Purpose chart
@@ -412,11 +445,14 @@ Planets: ${chart.planets.map(p => `${p.name}:${p.rashiName}${p.isExalted ? "[E]"
 Yogas: ${chart.yogas.slice(0, 8).map(y => y.split(":")[0]).join(", ")}
 
 ========================
-CRITICAL RULES FOR TIMING PREDICTIONS:
-- Use the DASHA + ANTARDASHA timeline above for specific event timing
-- Marriage: check 7th lord dasha/antardasha + Navamsa 7th lord
-- Career: check 10th lord dasha/antardasha
-- For "when" questions: find the relevant planet's antardasha period and give SPECIFIC year ranges
+CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
+1. For "when did I marry" → USE THE MARRIAGE WINDOWS ABOVE. The answer is one of those date ranges. DO NOT invent other dates.
+2. For "when will career change" → USE THE CAREER WINDOWS ABOVE.
+3. For "when will I have children" → USE THE CHILDREN WINDOWS ABOVE.
+4. NEVER say "you have not married" or assume the user's life status. You do NOT know their life events.
+5. Instead say: "Your chart shows the strongest window for marriage was [date from table above]."
+6. NEVER make up dates like "2013-2016" or "2030" unless those EXACT years appear in the pre-computed windows above.
+7. If the user says your answer is wrong, APOLOGIZE and re-check the computed windows.
 - NEVER guess timing — compute it from the dasha table above
 - Never expose chart jargon to the user — translate to plain life language
 ========================
@@ -443,7 +479,7 @@ CRITICAL RULES FOR TIMING PREDICTIONS:
     const recentMessages = await prisma.message.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 6,
     });
     const history = recentMessages.reverse().map((m) => ({
       role: m.role as "user" | "assistant",
