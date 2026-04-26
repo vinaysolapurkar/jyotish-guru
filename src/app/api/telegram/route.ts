@@ -490,7 +490,8 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
 
     // === COMPUTE-FIRST QUERY DETECTION ===
     // Detect specific questions and compute answers from chart data BEFORE calling AI
-    const lc = text.toLowerCase();
+    const actualQuestion = text.startsWith("/debug ") || text.startsWith("/prompt ") ? text.replace(/^\/(debug|prompt)\s+/, "") : text;
+    const lc = actualQuestion.toLowerCase();
     let computedAnswer = "";
 
     try {
@@ -572,6 +573,34 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
     const computeOverride = computedAnswer ? `\n\n========================\n${computedAnswer}\n========================\nYOU MUST base your response on the COMPUTED ANSWER above. Do NOT ignore it. Do NOT make up different dates or facts. Just rephrase it warmly in plain language.\n========================` : "";
 
     const fullSystemPrompt = chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone + computeOverride;
+
+    // DEBUG MODE — admin can see the exact prompt being sent
+    if (isAdmin && (text.startsWith("/debug ") || text.startsWith("/prompt "))) {
+      const userQ = text.replace(/^\/(debug|prompt)\s+/, "");
+      // Show what would be sent to DeepSeek
+      const debugOutput = [
+        "=== SYSTEM PROMPT (truncated) ===",
+        fullSystemPrompt.slice(0, 3500),
+        "",
+        "=== COMPUTED ANSWER ===",
+        computedAnswer || "(none — general question)",
+        "",
+        "=== USER QUESTION ===",
+        userQ,
+        "",
+        "=== CONVERSATION HISTORY ===",
+        history.map(m => `${m.role}: ${m.content.slice(0, 100)}`).join("\n"),
+      ].join("\n");
+      // Split into chunks for Telegram
+      const chunks = [];
+      for (let i = 0; i < debugOutput.length; i += 4000) {
+        chunks.push(debugOutput.slice(i, i + 4000));
+      }
+      for (const chunk of chunks) {
+        await sendTelegramMessage(chatId, chunk);
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     const deepseekResponse = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
