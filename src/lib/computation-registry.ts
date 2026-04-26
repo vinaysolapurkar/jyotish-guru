@@ -323,10 +323,18 @@ function timingForHouses(chart: BirthChartData, houseNums: number[]): string[] {
     }
   }
 
+  // Extract birth year from first dasha start
+  const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
+  const adultYear = birthYear + 18; // Only show periods after age 18
+
   const results: string[] = [];
   for (const md of chart.vimsottariDasha) {
     if (!md.antardashas) continue;
     for (const ad of md.antardashas) {
+      // Skip childhood periods for life event timing
+      if (ad.startDate.getFullYear() < adultYear) continue;
+      // Skip far future periods (50+ years from now)
+      if (ad.startDate.getFullYear() > new Date().getFullYear() + 20) continue;
       if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
         results.push(`${md.lord}-${ad.lord} (${periodStr(ad)})`);
       }
