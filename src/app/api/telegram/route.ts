@@ -191,19 +191,28 @@ function runComputations(types: string[], birthDate: string, birthTime: string, 
 
 function buildConversationPrompt(question: string, computed: Record<string, string>): string {
   const block = Object.entries(computed).map(([t, r]) => `--- ${t.toUpperCase()} ---\n${r}`).join("\n\n");
-  return `You are a warm, wise life guide. The user asked: "${question}"
 
-COMPUTED ANSWER FROM VEDIC CALCULATION ENGINE:
+  // Find the NEXT upcoming period from the computed data for future-oriented questions
+  const now = new Date().getFullYear();
+  const futurePeriodsMatch = block.match(new RegExp(`\\((${now}|${now+1}|${now+2}|${now+3}|${now+4})-\\d{4}\\)`, 'g'));
+  const nextPeriod = futurePeriodsMatch?.[0] || "";
+
+  return `You are a warm, wise life guide on Telegram. The user asked: "${question}"
+
+COMPUTED DATA:
 ${block}
 
-YOUR JOB: Rephrase the computed answer above in warm, conversational plain English.
-- Use ONLY the dates and facts from the computed answer
-- Do NOT make up any dates or add information not in the computed answer
-- Do NOT assume the user's life status (married/unmarried/etc.)
-- For timing questions, present the computed periods and ask "does this match?"
-- Keep it to 2-3 short paragraphs
-- No astrology jargon — plain life language only
-- No markdown formatting (no **, *, #, bullets)`;
+RULES FOR YOUR RESPONSE:
+1. Give ONE clear, direct answer FIRST. Example: "The best window for this is 2026-2029." NOT a list of 10 dates.
+2. For FUTURE questions ("when should I..."), pick the NEAREST upcoming favorable period${nextPeriod ? ` (hint: ${nextPeriod} looks relevant)` : ""} and recommend it clearly.
+3. For PAST questions ("when did I..."), pick the period that most likely matches and state it.
+4. After the clear answer, add 1-2 sentences of context about WHY that period is strong.
+5. End with a short question to engage them.
+6. Maximum 3 short paragraphs. Be direct, not vague.
+7. No astrology jargon. No markdown. No lists of dates.
+8. Do NOT dump all computed periods — pick the BEST one and commit to it.
+9. Do NOT say "I don't know" or "I need more info" — the computed data has the answer.
+10. Do NOT assume their life status. For past events, say "your chart shows..." not "you did/didn't..."`;
 }
 
 // --- Route handler ---
