@@ -215,6 +215,8 @@ export async function POST(req: NextRequest) {
           where: { id: user.id },
           data: { birthDate: null, birthTime: null, birthPlace: null, latitude: null, longitude: null },
         });
+        // Also clear all conversation history for a truly fresh start
+        await prisma.message.deleteMany({ where: { userId: user.id } });
       }
       sendTyping(chatId);
       const greeting = await askDeepSeek(
