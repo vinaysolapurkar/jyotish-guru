@@ -32,11 +32,11 @@ function sendTyping(chatId: string) {
 // --- DeepSeek (single call) ---
 async function askDeepSeek(system: string, user: string, maxTokens = 800, temperature = 0.3): Promise<string | null> {
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "google/gemini-2.0-flash-001",
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature,
@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
     const userContent = history ? `Recent conversation:\n${history}\n\nCurrent question: ${text}` : text;
 
     const reply = await askDeepSeek(systemPrompt, userContent, 800, 0.3);
-    const response = reply || `I had trouble connecting to the AI service. [Debug: API key ${process.env.OPENAI_API_KEY ? "present (" + process.env.OPENAI_API_KEY.slice(0,10) + "...)" : "MISSING"}]`;
+    const response = reply || "I had trouble connecting right now. Please try again in a moment.";
 
     // Save response and increment count
     await prisma.message.create({ data: { userId: user.id, role: "assistant", content: response } });
