@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { VEDIC_ASTROLOGY_SYSTEM_PROMPT, generateLifeThemes } from "@/lib/system-prompt";
 import { calculateBirthChart, BirthChartData } from "@/lib/astrology";
+import { FUNCTION_INDEX, COMPUTATION_REGISTRY } from "@/lib/computation-registry";
 
 const FREE_MESSAGES_PER_DAY = 5;
 const ADMIN_TELEGRAM_IDS = ["1923935459"]; // Vinay — app owner
@@ -719,73 +720,62 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
     const telegramTone = "\n\nYou are chatting on Telegram. Keep messages warm, personal, conversational. NO markdown (no **, no *, no #, no bullets). Short paragraphs like a friend talking, not a report.";
 
     // --- PASS 1: Ask DeepSeek which computations to run ---
-    const routerSystemPrompt = `You are a Vedic astrology computation router. Given a user's question, decide which computation(s) to run from the birth chart.
+    const routerSystemPrompt = `You are a Vedic astrology computation router. Given a user's question, decide which computation(s) to run and whether you need additional input from the user.
 
-Available computations:
-- marriage_timing: When marriage happened or will happen
-- career_timing: Career changes, job timing, professional growth
-- children_timing: When children were born or will be born
-- difficult_periods: Loss, setbacks, health issues, failures, accidents
-- wealth_periods: Money, income growth, financial gains
-- current_period: What's happening right now in their life
-- personality: Who they are, their nature, strengths
-- health: Health issues, body constitution, medical timing
-- education: Studies, learning, academic achievements
-- travel_foreign: Foreign travel, relocation, abroad connections
-- spiritual: Spiritual growth, meditation, enlightenment timing
-- full_dasha_timeline: Complete life timeline with all periods
-- general: General life overview
+${FUNCTION_INDEX}
 
-Return ONLY a JSON object: {"computations": ["type1", "type2"]}
-Nothing else. No explanation. Just the JSON.`;
+Return ONLY valid JSON. No explanation.`;
 
-    let computationTypes: string[] = ["general"];
+    let computationTypes: string[] = ["current_period"];
+    let computationParams: Record<string, unknown> = {};
     try {
-      const pass1Response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: routerSystemPrompt },
-            { role: "user", content: actualQuestion },
-          ],
-          max_tokens: 100,
-          temperature: 0.1,
-        }),
-      });
-      if (pass1Response.ok) {
-        const pass1Data = await pass1Response.json();
-        const pass1Content = pass1Data.choices?.[0]?.message?.content || "";
-        // Extract JSON from the response (handle markdown code blocks too)
-        const jsonMatch = pass1Content.match(/\{[\s\S]*"computations"[\s\S]*\}/);
+      const pass1Response = await askDeepSeek(routerSystemPrompt, actualQuestion, 200);
+      if (pass1Response) {
+        const jsonMatch = pass1Response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
+          // Check if DeepSeek wants to ask the user for input
+          if (parsed.action === "ask_user" && parsed.question) {
+            await sendTelegramMessage(chatId, parsed.question);
+            await prisma.message.createMany({
+              data: [
+                { userId: user.id, role: "user", content: text },
+                { userId: user.id, role: "assistant", content: parsed.question },
+              ],
+            });
+            return NextResponse.json({ ok: true });
+          }
           if (Array.isArray(parsed.computations) && parsed.computations.length > 0) {
             computationTypes = parsed.computations;
+          }
+          if (parsed.params && typeof parsed.params === "object") {
+            computationParams = parsed.params as Record<string, unknown>;
           }
         }
       }
     } catch {
-      // Fall back to ["general"] on any error
-      computationTypes = ["general"];
+      computationTypes = ["current_period"];
     }
 
-    // --- RUN COMPUTATIONS ---
+    // --- RUN COMPUTATIONS using the registry ---
     let computedResults = "";
     try {
       const chart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
-      const ascR = chart.ascendant.rashi ?? 0;
       const results: string[] = [];
       for (const compType of computationTypes) {
         try {
-          const result = runChartComputation(compType, chart, ascR);
-          results.push(`[${compType.toUpperCase()}]\n${result}`);
-        } catch {
-          results.push(`[${compType.toUpperCase()}]\n(computation failed)`);
+          const reg = COMPUTATION_REGISTRY[compType];
+          if (reg) {
+            const result = reg.compute(chart, computationParams);
+            results.push(`[${compType.toUpperCase()}]\n${result}`);
+          } else {
+            // Fallback to old runChartComputation if registry doesn't have it
+            const ascR = chart.ascendant.rashi ?? 0;
+            const result = runChartComputation(compType, chart, ascR);
+            results.push(`[${compType.toUpperCase()}]\n${result}`);
+          }
+        } catch (e) {
+          results.push(`[${compType.toUpperCase()}]\n(computation failed: ${e instanceof Error ? e.message : 'unknown'})`);
         }
       }
       computedResults = results.join("\n\n");
