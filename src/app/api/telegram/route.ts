@@ -500,20 +500,30 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
       const RL = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
       const getHouse = (r: number) => ((r - ascR + 12) % 12) + 1;
 
-      // Marriage question
+      // Marriage question — comprehensive detection using multiple significators
       if (lc.includes("marr") || lc.includes("wife") || lc.includes("husband") || lc.includes("spouse") || lc.includes("wedding") || lc.includes("shaadi")) {
         const lord7name = RL[(ascR + 6) % 12];
+        const house7rashi = (ascR + 6) % 12;
+        const planetsIn7 = chart.planets.filter(p => p.rashi === house7rashi).map(p => p.name);
+        const dk = chart.charaKarakas?.find(ck => ck.karaka === "Darakaraka")?.planet || "";
+        const navLord7 = chart.navamsa ? RL[((chart.navamsa.ascendant.rashi ?? 0) + 6) % 12] : "";
+        const marriageSignificators = new Set([lord7name, "Venus", dk, navLord7, ...planetsIn7].filter(Boolean));
+
         const windows: string[] = [];
         for (const md of chart.vimsottariDasha) {
           for (const ad of md.antardashas || []) {
-            if (ad.lord === lord7name || ad.lord === "Venus") {
-              windows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+            if (marriageSignificators.has(ad.lord) || marriageSignificators.has(md.lord)) {
+              const yr = ad.startDate.getFullYear();
+              if (yr >= 2001 && yr <= 2035) {
+                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+                windows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+              }
             }
           }
         }
         const venus = chart.planets.find(p => p.name === "Venus")!;
-        const venusHouse = getHouse(venus.rashi);
-        computedAnswer = `COMPUTED ANSWER (say this warmly, do NOT change the dates): Based on the birth chart calculations, the strongest windows for marriage in this person's life were: ${windows.slice(0, 6).join("; ")}. Venus (relationship energy) is in house ${venusHouse}. DO NOT say "you haven't married" — you don't know. Just state the computed windows and ask which one matches.`;
+        computedAnswer = `COMPUTED ANSWER: Marriage windows computed from 7th lord (${lord7name}), Venus, Darakaraka (${dk}), Navamsa 7th lord (${navLord7}), planets in 7th house (${planetsIn7.join(",") || "none"}): ${windows.join("; ")}. State ALL these windows. Ask "which of these periods matches?" DO NOT assume unmarried.`;
       }
 
       // Career question
