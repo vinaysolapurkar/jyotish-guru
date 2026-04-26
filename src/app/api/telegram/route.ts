@@ -581,6 +581,58 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
         computedAnswer = `COMPUTED ANSWER: Current period is ${currentDasha?.lord} mahadasha (${currentDasha?.startDate.getFullYear()}-${currentDasha?.endDate.getFullYear()}) with ${currentAD?.lord} sub-period (until ${currentAD?.endDate.getFullYear()}-${String((currentAD?.endDate.getMonth() ?? 0)+1).padStart(2,'0')}). Next sub-period: ${nextAD?.lord} (${nextAD?.startDate.getFullYear()}-${nextAD?.endDate.getFullYear()}). Describe what this means for their life in plain language.`;
       }
 
+      // Loss / setback / difficulty / health question
+      if (lc.includes("loss") || lc.includes("fail") || lc.includes("difficult") || lc.includes("setback") || lc.includes("problem") || lc.includes("health") || lc.includes("accident") || lc.includes("worst") || lc.includes("bad time") || lc.includes("tough") || lc.includes("struggle") || lc.includes("crisis")) {
+        const lord8name = RL[(ascR + 7) % 12]; // 8th lord — obstacles, transformation
+        const lord6name = RL[(ascR + 5) % 12]; // 6th lord — enemies, debts, health
+        const lord12name = RL[(ascR + 11) % 12]; // 12th lord — losses, expenses
+        const difficultSignificators = new Set([lord8name, lord6name, lord12name, "Saturn", "Rahu", "Ketu"]);
+
+        const diffWindows: string[] = [];
+        for (const md of chart.vimsottariDasha) {
+          for (const ad of md.antardashas || []) {
+            if (difficultSignificators.has(ad.lord) && difficultSignificators.has(md.lord)) {
+              // BOTH mahadasha AND antardasha lords are difficult = most challenging period
+              const yr = ad.startDate.getFullYear();
+              if (yr >= 1983 && yr <= 2045) {
+                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+                diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e} (INTENSE)`);
+              }
+            } else if (difficultSignificators.has(ad.lord) || difficultSignificators.has(md.lord)) {
+              const yr = ad.startDate.getFullYear();
+              if (yr >= 1983 && yr <= 2045) {
+                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+                diffWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+              }
+            }
+          }
+        }
+        computedAnswer = `COMPUTED ANSWER: Difficult/challenging periods computed from 8th lord (${lord8name}), 6th lord (${lord6name}), 12th lord (${lord12name}), Saturn, Rahu, Ketu periods. Most challenging windows (marked INTENSE = both lords difficult): ${diffWindows.slice(0, 15).join("; ")}. State the windows and ask "which period matches your experience?" DO NOT assume what happened — just present the timing.`;
+      }
+
+      // Money / wealth / financial question
+      if (lc.includes("money") || lc.includes("wealth") || lc.includes("financ") || lc.includes("income") || lc.includes("rich") || lc.includes("earn") || lc.includes("salary")) {
+        const lord2name = RL[(ascR + 1) % 12]; // 2nd lord — accumulated wealth
+        const lord11name = RL[(ascR + 10) % 12]; // 11th lord — gains, income
+        const wealthSignificators = new Set([lord2name, lord11name, "Jupiter"]);
+        const wealthWindows: string[] = [];
+        for (const md of chart.vimsottariDasha) {
+          for (const ad of md.antardashas || []) {
+            if (wealthSignificators.has(ad.lord) || wealthSignificators.has(md.lord)) {
+              const yr = ad.startDate.getFullYear();
+              if (yr >= 2001 && yr <= 2045) {
+                const s = `${yr}-${String(ad.startDate.getMonth()+1).padStart(2,'0')}`;
+                const e = `${ad.endDate.getFullYear()}-${String(ad.endDate.getMonth()+1).padStart(2,'0')}`;
+                wealthWindows.push(`${md.lord}-${ad.lord}: ${s} to ${e}`);
+              }
+            }
+          }
+        }
+        computedAnswer = `COMPUTED ANSWER: Wealth/income growth periods from 2nd lord (${lord2name}), 11th lord (${lord11name}), Jupiter: ${wealthWindows.slice(0, 10).join("; ")}. State these windows for financial growth.`;
+      }
+
       // Personality / tell me about myself
       if (lc.includes("about me") || lc.includes("about myself") || lc.includes("personality") || lc.includes("who am i")) {
         const moon = chart.planets.find(p => p.name === "Moon")!;
