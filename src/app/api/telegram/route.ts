@@ -488,14 +488,90 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
       content: m.content,
     }));
 
+    // === COMPUTE-FIRST QUERY DETECTION ===
+    // Detect specific questions and compute answers from chart data BEFORE calling AI
+    const lc = text.toLowerCase();
+    let computedAnswer = "";
+
+    try {
+      const chart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
+      const ascR = chart.ascendant.rashi ?? 0;
+      const RL = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
+      const getHouse = (r: number) => ((r - ascR + 12) % 12) + 1;
+
+      // Marriage question
+      if (lc.includes("marr") || lc.includes("wife") || lc.includes("husband") || lc.includes("spouse") || lc.includes("wedding") || lc.includes("shaadi")) {
+        const lord7name = RL[(ascR + 6) % 12];
+        const windows: string[] = [];
+        for (const md of chart.vimsottariDasha) {
+          for (const ad of md.antardashas || []) {
+            if (ad.lord === lord7name || ad.lord === "Venus") {
+              windows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+            }
+          }
+        }
+        const venus = chart.planets.find(p => p.name === "Venus")!;
+        const venusHouse = getHouse(venus.rashi);
+        computedAnswer = `COMPUTED ANSWER (say this warmly, do NOT change the dates): Based on the birth chart calculations, the strongest windows for marriage in this person's life were: ${windows.slice(0, 6).join("; ")}. Venus (relationship energy) is in house ${venusHouse}. DO NOT say "you haven't married" — you don't know. Just state the computed windows and ask which one matches.`;
+      }
+
+      // Career question
+      if (lc.includes("career") || lc.includes("job") || lc.includes("work") || lc.includes("business") || lc.includes("profession")) {
+        const lord10name = RL[(ascR + 9) % 12];
+        const mars = chart.planets.find(p => p.name === "Mars")!;
+        const sun = chart.planets.find(p => p.name === "Sun")!;
+        const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
+        const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
+        const careerWindows: string[] = [];
+        for (const md of chart.vimsottariDasha) {
+          for (const ad of md.antardashas || []) {
+            if (ad.lord === lord10name || ad.lord === "Sun") {
+              careerWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+            }
+          }
+        }
+        computedAnswer = `COMPUTED ANSWER (say this warmly): Mars is in house ${getHouse(mars.rashi)}${mars.isExalted ? " (very strong)" : ""}. Sun in house ${getHouse(sun.rashi)}. Current period: ${currentDasha?.lord}-${currentAD?.lord} (until ${currentAD?.endDate.getFullYear()}). Career change windows: ${careerWindows.slice(0, 6).join("; ")}. Tell the person about their career energy and timing based on these COMPUTED facts.`;
+      }
+
+      // Children question
+      if (lc.includes("child") || lc.includes("baby") || lc.includes("son") || lc.includes("daughter") || lc.includes("pregnant") || lc.includes("kids")) {
+        const lord5name = RL[(ascR + 4) % 12];
+        const childWindows: string[] = [];
+        for (const md of chart.vimsottariDasha) {
+          for (const ad of md.antardashas || []) {
+            if (ad.lord === lord5name || ad.lord === "Jupiter") {
+              childWindows.push(`${md.lord}-${ad.lord}: ${ad.startDate.getFullYear()} to ${ad.endDate.getFullYear()}`);
+            }
+          }
+        }
+        computedAnswer = `COMPUTED ANSWER (say this warmly): Children-related windows: ${childWindows.slice(0, 6).join("; ")}. State these computed dates. DO NOT make up other dates.`;
+      }
+
+      // Current period / what's happening now
+      if (lc.includes("what's happening") || lc.includes("current") || lc.includes("right now") || lc.includes("this year") || lc.includes("this period")) {
+        const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
+        const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
+        const nextAD = currentDasha?.antardashas?.find(a => a.startDate > new Date());
+        computedAnswer = `COMPUTED ANSWER: Current period is ${currentDasha?.lord} mahadasha (${currentDasha?.startDate.getFullYear()}-${currentDasha?.endDate.getFullYear()}) with ${currentAD?.lord} sub-period (until ${currentAD?.endDate.getFullYear()}-${String((currentAD?.endDate.getMonth() ?? 0)+1).padStart(2,'0')}). Next sub-period: ${nextAD?.lord} (${nextAD?.startDate.getFullYear()}-${nextAD?.endDate.getFullYear()}). Describe what this means for their life in plain language.`;
+      }
+
+      // Personality / tell me about myself
+      if (lc.includes("about me") || lc.includes("about myself") || lc.includes("personality") || lc.includes("who am i")) {
+        const moon = chart.planets.find(p => p.name === "Moon")!;
+        computedAnswer = `COMPUTED ANSWER: Ascendant ${chart.ascendant.rashiName}, Moon in ${moon.rashiName} (${moon.nakshatraName})${moon.isExalted ? " EXALTED" : ""}. ${chart.yogas.length} yogas including: ${chart.yogas.slice(0,4).map(y => y.split(":")[0]).join(", ")}. Describe their personality based on these SPECIFIC chart factors. Be concrete and personal.`;
+      }
+    } catch {}
+
     const modeContext = displayMode === "technical"
       ? "\n\n[TECHNICAL MODE] You may use Sanskrit terminology like Rashi, Nakshatra, Dasha, Yoga. Still keep the tone conversational."
       : "\n\n[SIMPLE MODE — STRICTLY ENFORCED] Zero astrology jargon. Zero planet names. Zero Sanskrit terms. Talk ONLY about their real life — career, relationships, money, health, family, decisions. You're a wise friend giving life advice, not an astrologer. Rephrase every chart insight as a plain life observation.";
 
     const telegramTone = "\n\nYou are chatting on Telegram. Keep messages warm, personal, conversational. NO markdown (no **, no *, no #, no bullets). Short paragraphs like a friend talking, not a report.";
 
-    // Put chart header FIRST, then the general system prompt
-    const fullSystemPrompt = chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone;
+    // If we have a computed answer, override the system prompt to force the AI to use it
+    const computeOverride = computedAnswer ? `\n\n========================\n${computedAnswer}\n========================\nYOU MUST base your response on the COMPUTED ANSWER above. Do NOT ignore it. Do NOT make up different dates or facts. Just rephrase it warmly in plain language.\n========================` : "";
+
+    const fullSystemPrompt = chartHeader + VEDIC_ASTROLOGY_SYSTEM_PROMPT + modeContext + telegramTone + computeOverride;
 
     const deepseekResponse = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
@@ -511,7 +587,7 @@ CRITICAL RULES (VIOLATING THESE IS FORBIDDEN):
           { role: "user", content: text },
         ],
         max_tokens: 1000,
-        temperature: 0.8,
+        temperature: computedAnswer ? 0.3 : 0.8, // Lower temp when we have computed answer — less creative, more obedient
       }),
     });
 
