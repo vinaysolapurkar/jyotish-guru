@@ -193,12 +193,11 @@ function buildConversationPrompt(question: string, computed: Record<string, stri
   const block = Object.entries(computed).map(([t, r]) => `--- ${t.toUpperCase()} ---\n${r}`).join("\n\n");
 
   // Find the NEXT upcoming period from the computed data for future-oriented questions
-  const now = new Date().getFullYear();
-  const futurePeriodsMatch = block.match(new RegExp(`\\((${now}|${now+1}|${now+2}|${now+3}|${now+4})-\\d{4}\\)`, 'g'));
+  const currentYear = new Date().getFullYear();
+  const futurePeriodsMatch = block.match(new RegExp(`\\((${currentYear}|${currentYear+1}|${currentYear+2}|${currentYear+3}|${currentYear+4})-\\d{4}\\)`, 'g'));
   const nextPeriod = futurePeriodsMatch?.[0] || "";
 
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const todayStr = `${currentYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
 
   return `You translate Vedic astrology computations into plain English on Telegram.
 
