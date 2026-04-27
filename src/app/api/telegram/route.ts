@@ -197,7 +197,12 @@ function buildConversationPrompt(question: string, computed: Record<string, stri
   const futurePeriodsMatch = block.match(new RegExp(`\\((${now}|${now+1}|${now+2}|${now+3}|${now+4})-\\d{4}\\)`, 'g'));
   const nextPeriod = futurePeriodsMatch?.[0] || "";
 
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
   return `You translate Vedic astrology computations into plain English on Telegram.
+
+TODAY'S DATE: ${todayStr}
 
 The user asked: "${question}"
 
@@ -205,7 +210,7 @@ COMPUTED DATA FROM CALCULATION ENGINE:
 ${block}
 
 RULES (follow strictly):
-1. For FUTURE questions ("when should I start business?", "good time to..."): Pick the NEAREST upcoming period from the data${nextPeriod ? ` (hint: ${nextPeriod})` : ""}. Say "The strongest window for this is [period]" clearly. Then 1-2 sentences WHY.
+1. For FUTURE questions ("when will I earn money?", "when should I start business?", "good time to..."): ONLY pick periods AFTER today's date (${todayStr}). Ignore all past periods. Pick the NEAREST FUTURE period${nextPeriod ? ` (hint: ${nextPeriod})` : ""}. Say "The strongest upcoming window for this is [period]" clearly. Then 1-2 sentences WHY.
 2. For PAST questions ("when did I marry?"): Present the TOP 2-3 most likely periods from the data. Say "Your chart shows these were the strongest windows: [periods]." Then ask "which of these matches your experience?"
 3. For ANALYSIS questions ("tell me about...", "am I good at..."): Summarize the key computed insights in 2-3 sentences. Be specific and personal.
 4. Maximum 2-3 short paragraphs. Be direct.
