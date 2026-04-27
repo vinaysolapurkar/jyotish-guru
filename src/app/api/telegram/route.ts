@@ -36,7 +36,7 @@ async function askDeepSeek(system: string, user: string, maxTokens = 800, temper
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "openai/gpt-4.1-mini",
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature,
@@ -197,22 +197,23 @@ function buildConversationPrompt(question: string, computed: Record<string, stri
   const futurePeriodsMatch = block.match(new RegExp(`\\((${now}|${now+1}|${now+2}|${now+3}|${now+4})-\\d{4}\\)`, 'g'));
   const nextPeriod = futurePeriodsMatch?.[0] || "";
 
-  return `You are a warm, wise life guide on Telegram. The user asked: "${question}"
+  return `You translate Vedic astrology computations into plain English on Telegram.
 
-COMPUTED DATA:
+The user asked: "${question}"
+
+COMPUTED DATA FROM CALCULATION ENGINE:
 ${block}
 
-RULES FOR YOUR RESPONSE:
-1. Give ONE clear, direct answer FIRST. Example: "The best window for this is 2026-2029." NOT a list of 10 dates.
-2. For FUTURE questions ("when should I..."), pick the NEAREST upcoming favorable period${nextPeriod ? ` (hint: ${nextPeriod} looks relevant)` : ""} and recommend it clearly.
-3. For PAST questions ("when did I..."), pick the period that most likely matches and state it.
-4. After the clear answer, add 1-2 sentences of context about WHY that period is strong.
-5. End with a short question to engage them.
-6. Maximum 3 short paragraphs. Be direct, not vague.
-7. No astrology jargon. No markdown. No lists of dates.
-8. Do NOT dump all computed periods — pick the BEST one and commit to it.
-9. Do NOT say "I don't know" or "I need more info" — the computed data has the answer.
-10. Do NOT assume their life status. For past events, say "your chart shows..." not "you did/didn't..."`;
+RULES (follow strictly):
+1. For FUTURE questions ("when should I start business?", "good time to..."): Pick the NEAREST upcoming period from the data${nextPeriod ? ` (hint: ${nextPeriod})` : ""}. Say "The strongest window for this is [period]" clearly. Then 1-2 sentences WHY.
+2. For PAST questions ("when did I marry?"): Present the TOP 2-3 most likely periods from the data. Say "Your chart shows these were the strongest windows: [periods]." Then ask "which of these matches your experience?"
+3. For ANALYSIS questions ("tell me about...", "am I good at..."): Summarize the key computed insights in 2-3 sentences. Be specific and personal.
+4. Maximum 2-3 short paragraphs. Be direct.
+5. No astrology jargon. No markdown. No bullet lists.
+6. Use ONLY facts from the computed data above. Do NOT invent dates or facts.
+7. Do NOT say "I need more info" or "consult an astrologer" — the computed data IS the answer.
+8. Do NOT assume their life status. Say "your chart shows..." not "you did/didn't..."
+9. End with a brief engaging question.`;
 }
 
 // --- Route handler ---
