@@ -66,29 +66,29 @@ export function generateChartSVG(chart: BirthChartData, name?: string): string {
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_SIZE}" height="${SVG_SIZE}" viewBox="0 0 ${SVG_SIZE} ${SVG_SIZE}">
   <defs>
     <style>
-      .sign-label { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 11px; fill: #a09890; }
-      .planet-text { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 14px; fill: #e07840; font-weight: 600; }
-      .asc-label { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 10px; fill: #c06020; font-weight: 700; }
-      .center-title { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 16px; fill: #5a4e42; font-weight: 700; text-anchor: middle; }
-      .center-name { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 14px; fill: #7a6e62; text-anchor: middle; }
-      .center-sub { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; font-size: 11px; fill: #a09890; text-anchor: middle; }
+      .sign-label { font-family: Arial, Helvetica, sans-serif; font-size: 15px; fill: #5a4e42; font-weight: 700; }
+      .planet-text { font-family: Arial, Helvetica, sans-serif; font-size: 16px; fill: #c0441a; font-weight: 700; }
+      .asc-label { font-family: Arial, Helvetica, sans-serif; font-size: 13px; fill: #c0441a; font-weight: 800; }
+      .center-title { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #2a2420; font-weight: 800; text-anchor: middle; }
+      .center-name { font-family: Arial, Helvetica, sans-serif; font-size: 16px; fill: #5a4e42; font-weight: 600; text-anchor: middle; }
+      .center-sub { font-family: Arial, Helvetica, sans-serif; font-size: 13px; fill: #8a7e72; font-weight: 500; text-anchor: middle; }
     </style>
   </defs>
 
   <!-- Background -->
-  <rect width="${SVG_SIZE}" height="${SVG_SIZE}" rx="8" fill="#faf7f2"/>
+  <rect width="${SVG_SIZE}" height="${SVG_SIZE}" rx="8" fill="#ffffff"/>
 
   <!-- Outer border -->
-  <rect x="${PADDING}" y="${PADDING}" width="${GRID_SIZE}" height="${GRID_SIZE}" fill="none" stroke="#8a7e72" stroke-width="1.5" rx="2"/>
+  <rect x="${PADDING}" y="${PADDING}" width="${GRID_SIZE}" height="${GRID_SIZE}" fill="none" stroke="#2a2420" stroke-width="2.5" rx="2"/>
 `;
 
   // Draw grid lines
   for (let i = 1; i < 4; i++) {
     const pos = PADDING + i * CELL_SIZE;
     // Horizontal lines
-    svg += `  <line x1="${PADDING}" y1="${pos}" x2="${PADDING + GRID_SIZE}" y2="${pos}" stroke="#8a7e72" stroke-width="0.75"/>\n`;
+    svg += `  <line x1="${PADDING}" y1="${pos}" x2="${PADDING + GRID_SIZE}" y2="${pos}" stroke="#2a2420" stroke-width="1.5"/>\n`;
     // Vertical lines
-    svg += `  <line x1="${pos}" y1="${PADDING}" x2="${pos}" y2="${PADDING + GRID_SIZE}" stroke="#8a7e72" stroke-width="0.75"/>\n`;
+    svg += `  <line x1="${pos}" y1="${PADDING}" x2="${pos}" y2="${PADDING + GRID_SIZE}" stroke="#2a2420" stroke-width="1.5"/>\n`;
   }
 
   // Draw each sign cell
@@ -101,7 +101,7 @@ export function generateChartSVG(chart: BirthChartData, name?: string): string {
 
     // Highlight ascendant cell
     if (isAscendant) {
-      svg += `  <rect x="${x + 0.5}" y="${y + 0.5}" width="${CELL_SIZE - 1}" height="${CELL_SIZE - 1}" fill="#fff3e0" rx="1"/>\n`;
+      svg += `  <rect x="${x + 1}" y="${y + 1}" width="${CELL_SIZE - 2}" height="${CELL_SIZE - 2}" fill="#ffe0b2" rx="2"/>\n`;
     }
 
     // Sign abbreviation at top-left
