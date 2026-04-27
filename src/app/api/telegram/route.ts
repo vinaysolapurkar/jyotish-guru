@@ -39,8 +39,9 @@ async function sendChartImage(chatId: string, chart: BirthChartData, name?: stri
     // Convert SVG to PNG using sharp (bundled with Next.js)
     let pngBuffer: Buffer;
     try {
-      const sharp = (await import("sharp")).default;
-      pngBuffer = await sharp(svgData).png().toBuffer();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const sharp = require("sharp");
+      pngBuffer = await sharp(Buffer.from(svgData)).png().toBuffer();
     } catch {
       // If sharp fails, send as document fallback
       const form = new FormData();
