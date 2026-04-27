@@ -334,7 +334,7 @@ function timingForHouses(chart: BirthChartData, houseNums: number[]): string[] {
     if (!md.antardashas) continue;
     for (const ad of md.antardashas) {
       if (ad.startDate.getFullYear() < adultYear) continue;
-      if (ad.startDate.getFullYear() > nowYear + 20) continue;
+      if (ad.startDate.getFullYear() > birthYear + 100) continue; // 100 years from DOB
       if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
         const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})`;
         if (ad.endDate.getFullYear() <= nowYear) {
