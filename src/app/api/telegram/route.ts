@@ -46,7 +46,7 @@ async function sendChartImage(chatId: string, chart: BirthChartData, name?: stri
       // If sharp fails, send as document fallback
       const form = new FormData();
       form.append("chat_id", chatId);
-      form.append("document", new Blob([svgData], { type: "image/svg+xml" }), "birth-chart.svg");
+      form.append("document", new Blob([new Uint8Array(svgData)], { type: "image/svg+xml" }), "birth-chart.svg");
       form.append("caption", "Your Birth Chart (South Indian Style)");
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
       return;
@@ -55,7 +55,7 @@ async function sendChartImage(chatId: string, chart: BirthChartData, name?: stri
     // Send as inline photo
     const form = new FormData();
     form.append("chat_id", chatId);
-    form.append("photo", new Blob([pngBuffer], { type: "image/png" }), "birth-chart.png");
+    form.append("photo", new Blob([new Uint8Array(pngBuffer)], { type: "image/png" }), "birth-chart.png");
     form.append("caption", "Your Birth Chart (South Indian Style)");
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
       method: "POST",
