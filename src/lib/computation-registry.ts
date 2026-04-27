@@ -382,19 +382,88 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart, params) => {
       const lines: string[] = ["MARRIAGE TIMING ANALYSIS\n"];
 
-      // 7th lord analysis
+      // --- TYPE OF MARRIAGE (love vs arranged) ---
+      const venus = findPlanet(chart, "Venus");
+      const lord5House = houseLordInHouse(chart, 5);
       const lord7House = houseLordInHouse(chart, 7);
-      if (lord7House) {
-        lines.push(`Your marriage significator sits in house ${lord7House}: ${LORD7_IN_HOUSE[lord7House]}`);
+      const venusHouse = venus ? houseOf(venus.rashi, chart.ascendant.rashi) : 0;
+
+      // Love marriage indicators: Venus in 5th, 5th lord in 7th, 7th lord in 5th, Venus conjunct 5th lord
+      const loveIndicators: string[] = [];
+      if (venusHouse === 5) loveIndicators.push("Venus in the 5th house of romance");
+      if (lord5House === 7) loveIndicators.push("5th lord (romance) sitting in the 7th house of marriage");
+      if (lord7House === 5) loveIndicators.push("7th lord (spouse) sitting in the 5th house of love");
+      const lord5Rashi = houseLordRashi(chart, 5);
+      if (venus && lord5Rashi !== null && venus.rashi === lord5Rashi) loveIndicators.push("Venus conjunct the 5th lord");
+      // Rahu in 7th can also indicate unconventional marriage
+      const rahu = findPlanet(chart, "Rahu");
+      if (rahu && houseOf(rahu.rashi, chart.ascendant.rashi) === 7) loveIndicators.push("Rahu in the 7th house suggesting an unconventional union");
+
+      if (loveIndicators.length >= 2) {
+        lines.push(`TYPE: Strong love marriage indicators — ${loveIndicators.join(", ")}. This chart leans heavily toward a self-chosen partner.`);
+      } else if (loveIndicators.length === 1) {
+        lines.push(`TYPE: Some romantic element likely in how you meet your spouse (${loveIndicators[0]}), but the match may still involve family approval or introduction.`);
+      } else {
+        lines.push("TYPE: The chart favors a traditionally arranged or family-introduced marriage. The partner is likely to come through family networks, community, or matchmaking.");
       }
 
-      // Venus analysis
-      const venus = findPlanet(chart, "Venus");
+      // --- 7th lord analysis ---
+      if (lord7House) {
+        lines.push(`\nYour marriage significator sits in house ${lord7House}: ${LORD7_IN_HOUSE[lord7House]}`);
+      }
+
+      // --- Venus analysis ---
       if (venus) {
-        const venusHouse = houseOf(venus.rashi, chart.ascendant.rashi);
         lines.push(`\nVenus (love planet) in house ${venusHouse}: ${VENUS_IN_HOUSE[venusHouse]}`);
-        if (venus.isExalted) lines.push("Venus is exalted — relationships are blessed with grace and attraction.");
-        if (venus.isDebilitated) lines.push("Venus is debilitated — relationships require extra patience and conscious effort.");
+        if (venus.isExalted) lines.push("Venus is exalted — relationships are blessed with grace, attraction, and natural ease.");
+        if (venus.isDebilitated) lines.push("Venus is debilitated — relationships require extra patience and conscious effort. Growth comes through working on the relationship.");
+        if (venus.isRetrograde) lines.push("Venus is retrograde — you may revisit past relationships or take time to understand what you truly want in love before committing.");
+      }
+
+      // --- QUALITY OF MARRIED LIFE (from Navamsa 7th house) ---
+      const nav7Rashi = (chart.navamsa.ascendant.rashi + 6) % 12;
+      const nav7Sign = RASHI_NAMES[nav7Rashi];
+      const nav7Traits = RASHI_DETAILED_TRAITS[nav7Sign];
+      lines.push(`\nMARRIED LIFE QUALITY (Navamsa 7th house in ${nav7Sign}):`);
+      if (nav7Traits) {
+        lines.push(`The deeper texture of your marriage carries ${nav7Sign} energy — ${nav7Traits.personality.split(".")[0].toLowerCase()}.`);
+      }
+      // Check planets in Navamsa 7th
+      const nav7Planets = chart.navamsa.planets.filter((p) => p.rashi === nav7Rashi);
+      if (nav7Planets.length > 0) {
+        const nav7Names = nav7Planets.map((p) => p.name).join(", ");
+        lines.push(`${nav7Names} in your Navamsa 7th house — ${nav7Planets.length > 1 ? "these planets color" : "this planet colors"} your married life with ${nav7Planets.map((p) => {
+          if (p.name === "Jupiter") return "wisdom and growth";
+          if (p.name === "Venus") return "love and harmony";
+          if (p.name === "Saturn") return "commitment but also distance or delay";
+          if (p.name === "Mars") return "passion but also occasional friction";
+          if (p.name === "Mercury") return "communication and intellectual bonding";
+          if (p.name === "Sun") return "pride and authority dynamics";
+          if (p.name === "Moon") return "deep emotional connection";
+          if (p.name === "Rahu") return "unconventional dynamics";
+          if (p.name === "Ketu") return "spiritual bonding but possible detachment";
+          return "unique energy";
+        }).join(" and ")}.`);
+      }
+
+      // --- SPOUSE CHARACTERISTICS (from Darakaraka and Navamsa 7th lord) ---
+      const dk = chart.charaKarakas.find((ck) => ck.karaka === "DK" || ck.karaka === "Darakaraka");
+      if (dk) {
+        const dkPlanet = findPlanet(chart, dk.planet);
+        if (dkPlanet) {
+          const dkSign = dkPlanet.rashiName;
+          lines.push(`\nSPOUSE PROFILE (Darakaraka ${dk.planet} in ${dkSign}):`);
+          const spouseTraits: Record<string, string> = {
+            Sun: "Your spouse carries natural authority, dignity, and leadership. They are likely confident, possibly connected to government or management.",
+            Moon: "Your spouse is nurturing, emotionally sensitive, and caring. They create a warm home environment and are deeply intuitive.",
+            Mars: "Your spouse is energetic, assertive, and action-oriented. They may be athletic, competitive, or work in engineering/military/surgery.",
+            Mercury: "Your spouse is intelligent, communicative, and youthful in spirit. They may be in business, writing, accounting, or tech.",
+            Jupiter: "Your spouse is wise, generous, and well-educated. They may be a teacher, counselor, or someone with strong values.",
+            Venus: "Your spouse is attractive, artistic, and refined. They appreciate beauty, luxury, and the finer things in life.",
+            Saturn: "Your spouse is mature, disciplined, and hardworking. They may be older or carry responsibilities seriously. The bond deepens with time.",
+          };
+          if (spouseTraits[dk.planet]) lines.push(spouseTraits[dk.planet]);
+        }
       }
 
       // Upapada Lagna
@@ -410,10 +479,69 @@ export const COMPUTATION_REGISTRY: Record<string, {
         lines.push(`Venus in Navamsa: ${navVenus.rashiName} — this colors the quality of married life.`);
       }
 
-      // Timing via dashas — houses 7, 2, 11 (marriage, family, gains)
+      // --- TIMING with WHY explanations ---
       lines.push("\nKey marriage timing periods:");
-      const periods = timingForHouses(chart, [7, 2, 11]);
-      lines.push(periods.slice(0, 10).join("\n"));
+      const relevantHouses = [7, 2, 11];
+      const relevantPlanets = new Set<string>();
+      for (const h of relevantHouses) {
+        const houseRashi = (chart.ascendant.rashi + h - 1) % 12;
+        relevantPlanets.add(RASHI_LORDS[houseRashi]);
+        for (const p of chart.planets) {
+          if (houseOf(p.rashi, chart.ascendant.rashi) === h) relevantPlanets.add(p.name);
+        }
+      }
+      // Add Venus as natural karaka
+      relevantPlanets.add("Venus");
+
+      const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
+      const nowYear = new Date().getFullYear();
+      const futureEntries: string[] = [];
+      const pastEntries: string[] = [];
+
+      for (const md of chart.vimsottariDasha) {
+        if (!md.antardashas) continue;
+        for (const ad of md.antardashas) {
+          if (ad.startDate.getFullYear() < birthYear + 18) continue;
+          if (ad.startDate.getFullYear() > birthYear + 100) continue;
+          if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
+            // Build a WHY explanation
+            const reasons: string[] = [];
+            const mdPlanet = findPlanet(chart, md.lord);
+            const adPlanet = findPlanet(chart, ad.lord);
+            if (mdPlanet) {
+              const mdH = houseOf(mdPlanet.rashi, chart.ascendant.rashi);
+              if (mdH === 7) reasons.push(`${md.lord} directly activates your partnership house`);
+              else if (mdH === 2) reasons.push(`${md.lord} activates family and commitment`);
+              else if (mdH === 11) reasons.push(`${md.lord} activates fulfillment of desires`);
+            }
+            if (adPlanet) {
+              const adH = houseOf(adPlanet.rashi, chart.ascendant.rashi);
+              if (adH === 7) reasons.push(`${ad.lord} triggers the marriage house`);
+              else if (adH === 2) reasons.push(`${ad.lord} brings family events`);
+              else if (adH === 11) reasons.push(`${ad.lord} brings wish fulfillment`);
+            }
+            if (md.lord === "Venus" || ad.lord === "Venus") reasons.push("Venus period naturally activates love and marriage");
+
+            const why = reasons.length > 0 ? ` — ${reasons.join("; ")}` : "";
+            const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})${why}`;
+
+            if (ad.endDate.getFullYear() <= nowYear) {
+              pastEntries.push(entry);
+            } else {
+              futureEntries.push(entry);
+            }
+          }
+        }
+      }
+
+      if (futureEntries.length > 0) {
+        lines.push("UPCOMING PERIODS:");
+        lines.push(...futureEntries.slice(0, 5));
+      }
+      if (pastEntries.length > 0) {
+        lines.push("\nPAST PERIODS:");
+        lines.push(...pastEntries.slice(-3));
+      }
 
       if (params?.actual_marriage_year) {
         const year = params.actual_marriage_year;
@@ -435,9 +563,64 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart) => {
       const lines: string[] = ["CAREER TIMING ANALYSIS\n"];
 
+      // --- CAREER TYPE from D-10 and 10th lord ---
       const lord10House = houseLordInHouse(chart, 10);
       if (lord10House) {
         lines.push(`Your career lord sits in house ${lord10House}: ${LORD10_IN_HOUSE[lord10House]}`);
+      }
+
+      // D-10 planet analysis for career type
+      const d10Planets = chart.dasamsa.planets;
+      const d10_10Rashi = (chart.dasamsa.ascendant.rashi + 9) % 12;
+      const d10InTenth = d10Planets.filter((p) => p.rashi === d10_10Rashi);
+      if (d10InTenth.length > 0) {
+        const careerFlavors: string[] = d10InTenth.map((p) => {
+          if (p.name === "Sun") return "leadership, government, or authority roles";
+          if (p.name === "Moon") return "public-facing work, hospitality, or nurturing professions";
+          if (p.name === "Mars") return "engineering, military, sports, surgery, or real estate";
+          if (p.name === "Mercury") return "communication, writing, business, IT, or accounting";
+          if (p.name === "Jupiter") return "teaching, law, consulting, finance, or advisory roles";
+          if (p.name === "Venus") return "arts, entertainment, luxury goods, fashion, or diplomacy";
+          if (p.name === "Saturn") return "manufacturing, mining, labor-intensive work, or government service";
+          if (p.name === "Rahu") return "technology, foreign companies, unconventional industries, or media";
+          if (p.name === "Ketu") return "research, spiritual work, alternative medicine, or behind-the-scenes roles";
+          return "specialized work";
+        });
+        lines.push(`\nCAREER TYPE INDICATORS: Planets in D-10 10th house point toward ${careerFlavors.join(" combined with ")}.`);
+      }
+
+      // --- BUSINESS vs SERVICE ---
+      // Compare 7th house (business/partnership) vs 6th house (service/employment) strength in D-10
+      const d10_7Rashi = (chart.dasamsa.ascendant.rashi + 6) % 12;
+      const d10_6Rashi = (chart.dasamsa.ascendant.rashi + 5) % 12;
+      const d10In7 = d10Planets.filter((p) => p.rashi === d10_7Rashi);
+      const d10In6 = d10Planets.filter((p) => p.rashi === d10_6Rashi);
+      const sav7d1 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 6) % 12];
+      const sav6d1 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 5) % 12];
+
+      if (d10In7.length > d10In6.length || sav7d1 > sav6d1 + 3) {
+        lines.push("\nBUSINESS vs SERVICE: Your chart favors independent business, partnerships, or consulting. The entrepreneurial path has stronger planetary support for you.");
+      } else if (d10In6.length > d10In7.length || sav6d1 > sav7d1 + 3) {
+        lines.push("\nBUSINESS vs SERVICE: Your chart leans toward employment, service roles, or working within established organizations. You thrive with structured environments.");
+      } else {
+        lines.push("\nBUSINESS vs SERVICE: Both paths are viable for you. You could succeed in employment or business — the running dasha period will tip the balance.");
+      }
+
+      // --- CURRENT CAREER ENERGY ---
+      const currentMD = getCurrentDasha(chart.vimsottariDasha);
+      if (currentMD) {
+        const mdPlanet = findPlanet(chart, currentMD.lord);
+        if (mdPlanet) {
+          const mdHouse = houseOf(mdPlanet.rashi, chart.ascendant.rashi);
+          const careerHouses = [10, 6, 7, 11, 2];
+          if (careerHouses.includes(mdHouse)) {
+            lines.push(`\nCURRENT CAREER ENERGY: Strong — your current major period lord ${currentMD.lord} directly activates house ${mdHouse}, which is career-relevant. This is an active professional phase.`);
+          } else if ([1, 5, 9].includes(mdHouse)) {
+            lines.push(`\nCURRENT CAREER ENERGY: Growth-oriented — your ${currentMD.lord} period activates house ${mdHouse}, bringing personal development, learning, and visibility that supports career indirectly.`);
+          } else {
+            lines.push(`\nCURRENT CAREER ENERGY: Moderate — your ${currentMD.lord} period focuses on house ${mdHouse} matters. Career changes are possible but not the primary theme right now.`);
+          }
+        }
       }
 
       // D-10 (Dasamsa) analysis
@@ -454,10 +637,73 @@ export const COMPUTATION_REGISTRY: Record<string, {
         lines.push(`\nSaturn (career planet) in house ${satHouse}: ${PLANET_IN_HOUSE_MEANING["Saturn"]?.[satHouse] || ""}`);
       }
 
-      // Timing via houses 10, 6 (career, service), 11 (gains)
+      // --- STRENGTHS TO LEVERAGE ---
+      const strengths: string[] = [];
+      for (const p of chart.planets) {
+        if (p.isExalted) {
+          const h = houseOf(p.rashi, chart.ascendant.rashi);
+          strengths.push(`${p.name} exalted in house ${h} — leverage ${p.name === "Sun" ? "leadership and authority" : p.name === "Moon" ? "emotional intelligence and public connect" : p.name === "Mars" ? "courage, drive, and technical skills" : p.name === "Mercury" ? "communication and analytical ability" : p.name === "Jupiter" ? "wisdom, teaching, and advisory roles" : p.name === "Venus" ? "creativity, aesthetics, and people skills" : p.name === "Saturn" ? "discipline, structure, and long-term planning" : "this planet's energy"} for career growth`);
+        }
+      }
+      if (strengths.length > 0) {
+        lines.push("\nKEY STRENGTHS TO LEVERAGE:");
+        lines.push(strengths.join("\n"));
+      }
+
+      // --- TIMING with career event type ---
       lines.push("\nKey career timing periods:");
-      const periods = timingForHouses(chart, [10, 6, 11]);
-      lines.push(periods.slice(0, 10).join("\n"));
+      const relevantPlanets = new Set<string>();
+      for (const h of [10, 6, 11]) {
+        const houseRashi = (chart.ascendant.rashi + h - 1) % 12;
+        relevantPlanets.add(RASHI_LORDS[houseRashi]);
+        for (const p of chart.planets) {
+          if (houseOf(p.rashi, chart.ascendant.rashi) === h) relevantPlanets.add(p.name);
+        }
+      }
+
+      const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
+      const nowYear = new Date().getFullYear();
+      const ascSign = chart.ascendant.rashiName;
+      const futureEntries: string[] = [];
+      const pastEntries: string[] = [];
+
+      for (const md of chart.vimsottariDasha) {
+        if (!md.antardashas) continue;
+        for (const ad of md.antardashas) {
+          if (ad.startDate.getFullYear() < birthYear + 18) continue;
+          if (ad.startDate.getFullYear() > birthYear + 100) continue;
+          if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
+            const adPlanet = findPlanet(chart, ad.lord);
+            const mdPlanet = findPlanet(chart, md.lord);
+            let eventType = "";
+            if (adPlanet) {
+              const adH = houseOf(adPlanet.rashi, chart.ascendant.rashi);
+              const fav = assessDashaFavorability(ad.lord, ascSign, adPlanet.rashi, chart.ascendant.rashi, adPlanet.isExalted, adPlanet.isDebilitated);
+              if (adH === 10 && fav.favorable) eventType = " → promotion or recognition likely";
+              else if (adH === 11 && fav.favorable) eventType = " → income growth, gains from profession";
+              else if (adH === 7) eventType = " → business partnerships or independent ventures";
+              else if (adH === 6 && !fav.favorable) eventType = " → work conflicts or job changes";
+              else if (adH === 8) eventType = " → sudden career transformation";
+              else if (adH === 12) eventType = " → foreign assignment or career pause";
+              else if (adH === 1 && fav.favorable) eventType = " → new career identity or fresh start";
+              else if (fav.favorable) eventType = " → positive career developments";
+              else eventType = " → career challenges requiring patience";
+            }
+            const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})${eventType}`;
+            if (ad.endDate.getFullYear() <= nowYear) pastEntries.push(entry);
+            else futureEntries.push(entry);
+          }
+        }
+      }
+
+      if (futureEntries.length > 0) {
+        lines.push("UPCOMING PERIODS:");
+        lines.push(...futureEntries.slice(0, 5));
+      }
+      if (pastEntries.length > 0) {
+        lines.push("\nPAST PERIODS:");
+        lines.push(...pastEntries.slice(-3));
+      }
 
       return lines.join("\n");
     },
@@ -471,17 +717,61 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart, params) => {
       const lines: string[] = ["CHILDREN TIMING ANALYSIS\n"];
 
+      // --- NUMBER OF CHILDREN INDICATION ---
+      // From 5th house strength and Jupiter's condition
+      const sav5 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 4) % 12];
+      const sav9 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 8) % 12];
+      const jupiter = findPlanet(chart, "Jupiter");
       const lord5House = houseLordInHouse(chart, 5);
+
+      // Count planets in 5th house
+      const planetsIn5 = chart.planets.filter((p) => houseOf(p.rashi, chart.ascendant.rashi) === 5);
+      // Check if Rahu/Ketu afflict 5th
+      const rahuIn5 = planetsIn5.some((p) => p.name === "Rahu");
+      const ketuIn5 = planetsIn5.some((p) => p.name === "Ketu");
+      const saturnIn5 = planetsIn5.some((p) => p.name === "Saturn");
+
+      let childrenCount = "two or more children";
+      if ((rahuIn5 || ketuIn5) && saturnIn5) {
+        childrenCount = "possibly one child, with some delays or difficulties in conceiving";
+      } else if (rahuIn5 || ketuIn5) {
+        childrenCount = "one to two children, with some karmic complexity around children";
+      } else if (saturnIn5) {
+        childrenCount = "children likely come with some delay, but Saturn's discipline brings responsible parenting";
+      } else if (sav5 >= 30 && jupiter && !jupiter.isDebilitated) {
+        childrenCount = "two or more children, with the 5th house well-supported";
+      } else if (sav5 < 22) {
+        childrenCount = "fewer children or some challenges around children — focused attention on each child";
+      }
+      lines.push(`CHILDREN INDICATION: The chart suggests ${childrenCount}.`);
+      lines.push(`5th house strength: ${sav5} Ashtakavarga points${sav5 >= 28 ? " (strong)" : sav5 < 22 ? " (needs support)" : " (moderate)"}.`);
+
+      // --- GENDER INDICATION from 5th house sign ---
+      const house5Rashi = (chart.ascendant.rashi + 4) % 12;
+      const house5Sign = RASHI_NAMES[house5Rashi];
+      // Odd signs (Aries, Gemini, Leo, Libra, Sag, Aquarius = indexes 0,2,4,6,8,10) indicate male
+      const isOddSign = house5Rashi % 2 === 0;
+      lines.push(`\n5th house sign is ${house5Sign} (${isOddSign ? "odd/masculine" : "even/feminine"} sign) — the first child may lean toward ${isOddSign ? "male" : "female"}, though this is one of several indicators and not definitive.`);
+
+      // --- RELATIONSHIP WITH CHILDREN ---
       if (lord5House) {
-        lines.push(`Your 5th lord (children) sits in house ${lord5House}: ${DASHA_LORD_IN_HOUSE[lord5House]}`);
+        lines.push(`\nYour 5th lord (children) sits in house ${lord5House}: ${DASHA_LORD_IN_HOUSE[lord5House]}`);
+        if (lord5House === 1) lines.push("Children are closely identified with you — you see yourself in them and they shape your identity.");
+        else if (lord5House === 4) lines.push("Children bring happiness to your home life. Strong emotional bond with children.");
+        else if (lord5House === 7) lines.push("Children may connect you to your spouse more deeply, or play a role in partnerships.");
+        else if (lord5House === 9) lines.push("Excellent — children bring fortune and continue your legacy. You are a natural mentor to them.");
+        else if (lord5House === 10) lines.push("Children may be connected to your career or bring you public recognition as a parent.");
+        else if (lord5House === 6) lines.push("Some challenges or health concerns around children may arise, but overcome with care.");
+        else if (lord5House === 8) lines.push("Deep transformative experiences through children. The bond grows through overcoming difficulties together.");
+        else if (lord5House === 12) lines.push("Children may settle far from you, or you may sacrifice significantly for their welfare. The bond is spiritual.");
       }
 
-      const jupiter = findPlanet(chart, "Jupiter");
       if (jupiter) {
         const jupHouse = houseOf(jupiter.rashi, chart.ascendant.rashi);
-        lines.push(`Jupiter (natural significator of children) in house ${jupHouse}: ${PLANET_IN_HOUSE_MEANING["Jupiter"]?.[jupHouse] || ""}`);
-        if (jupiter.isExalted) lines.push("Jupiter exalted — children are a source of great blessing.");
-        if (jupiter.isDebilitated) lines.push("Jupiter debilitated — children may come with delays or challenges that ultimately teach patience.");
+        lines.push(`\nJupiter (natural significator of children) in house ${jupHouse}: ${PLANET_IN_HOUSE_MEANING["Jupiter"]?.[jupHouse] || ""}`);
+        if (jupiter.isExalted) lines.push("Jupiter exalted — children are a tremendous source of blessing, joy, and pride.");
+        if (jupiter.isDebilitated) lines.push("Jupiter debilitated — children may come with delays or challenges, but they ultimately teach you profound patience and unconditional love.");
+        if (jupiter.isRetrograde) lines.push("Jupiter retrograde — blessings related to children may come in unexpected ways or timing.");
       }
 
       // Timing via houses 5, 9 (children, fortune), 2 (family growth)
@@ -520,13 +810,23 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart) => {
       const lines: string[] = ["DIFFICULT PERIODS ANALYSIS\n"];
       const ascSign = chart.ascendant.rashiName;
+      const nowYear = new Date().getFullYear();
 
-      // Check Marana Karaka Sthana planets
+      // Check Marana Karaka Sthana planets with DETAILED effects
       const mksWarnings: string[] = [];
       for (const planet of chart.planets) {
         if (isInMKS(chart, planet.name)) {
           const house = houseOf(planet.rashi, chart.ascendant.rashi);
-          mksWarnings.push(`${planet.name} is in Marana Karaka Sthana (house ${house}) — severely weakened. During ${planet.name} periods, expect challenges related to ${BODY_PART_BY_PLANET[planet.name] || "its significations"}.`);
+          const mksEffects: Record<string, string> = {
+            Sun: "vitality drops, authority figures cause problems, father's health may suffer, career setbacks through ego conflicts",
+            Moon: "deep emotional disturbance, anxiety, depression risk, mother's health concerns, sleep disorders, feeling emotionally unsafe",
+            Mars: "relationship conflicts, partnership breakdowns, physical injuries from recklessness, blood-related health issues",
+            Mercury: "mental restlessness at home, property disputes, education disruptions, nervous system complaints",
+            Jupiter: "poor judgment in daily decisions, conflicts with siblings, wisdom fails in practical matters, spiritual stagnation",
+            Venus: "relationship disappointments through illness or enemies, romantic betrayals, kidney or reproductive health issues, creative blocks",
+            Saturn: "chronic health issues, identity crisis, feeling burdened by existence, delayed recognition despite hard work",
+          };
+          mksWarnings.push(`${planet.name} is in Marana Karaka Sthana (house ${house}) — severely weakened. During ${planet.name} periods: ${mksEffects[planet.name] || "challenges related to " + (BODY_PART_BY_PLANET[planet.name] || "its significations")}.`);
         }
       }
       if (mksWarnings.length > 0) {
@@ -534,26 +834,94 @@ export const COMPUTATION_REGISTRY: Record<string, {
         lines.push(mksWarnings.join("\n"));
       }
 
-      // Badhakasthana analysis
+      // Badhakasthana analysis — DETAILED
       const ascQuality = signQuality(chart.ascendant.rashi);
       const badhakHouse = BADHAKASTHANA[ascQuality];
       if (badhakHouse) {
         const badhakRashi = (chart.ascendant.rashi + badhakHouse - 1) % 12;
         const badhakLord = RASHI_LORDS[badhakRashi];
-        lines.push(`\nBadhaka (obstruction) lord is ${badhakLord} (rules house ${badhakHouse}). Periods of ${badhakLord} can bring sudden obstacles and inexplicable difficulties.`);
+        const badhakPlanet = findPlanet(chart, badhakLord);
+        lines.push(`\nBADHAKA (INEXPLICABLE TROUBLES):`);
+        lines.push(`Your ascendant is ${ascQuality}, so house ${badhakHouse} is your Badhakasthana, ruled by ${badhakLord}.`);
+        lines.push(`Periods of ${badhakLord} can bring sudden obstacles that seem to come from nowhere — legal tangles, bureaucratic blocks, health mysteries, or spiritual disturbances that defy logical explanation.`);
+        if (badhakPlanet) {
+          const bpHouse = houseOf(badhakPlanet.rashi, chart.ascendant.rashi);
+          lines.push(`${badhakLord} sits in your house ${bpHouse}, so these obstructions manifest through ${HOUSE_SIGNIFICATIONS[bpHouse - 1]?.split(",")[0] || "that area of life"}.`);
+          const remedy = REMEDIES[badhakLord];
+          if (remedy) {
+            lines.push(`Mitigation: Worship ${remedy.deity} and recite "${remedy.mantra}" during ${badhakLord} periods.`);
+          }
+        }
       }
 
-      // Dusthana lord periods (6, 8, 12)
-      lines.push("\nChallenging timing periods (6th, 8th, 12th house activations):");
-      const periods = timingForHouses(chart, [6, 8, 12]);
-      lines.push(periods.slice(0, 12).join("\n"));
+      // --- DIFFICULTY TYPE for past/future periods ---
+      lines.push("\nCHALLENGING TIMING PERIODS:");
 
-      // Debilitated planet periods
+      const relevantPlanets = new Set<string>();
+      for (const h of [6, 8, 12]) {
+        const houseRashi = (chart.ascendant.rashi + h - 1) % 12;
+        relevantPlanets.add(RASHI_LORDS[houseRashi]);
+        for (const p of chart.planets) {
+          if (houseOf(p.rashi, chart.ascendant.rashi) === h) relevantPlanets.add(p.name);
+        }
+      }
+
+      const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
+      const pastEntries: string[] = [];
+      const futureEntries: string[] = [];
+
+      for (const md of chart.vimsottariDasha) {
+        if (!md.antardashas) continue;
+        for (const ad of md.antardashas) {
+          if (ad.startDate.getFullYear() < birthYear + 5) continue;
+          if (ad.startDate.getFullYear() > birthYear + 100) continue;
+          if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
+            const adPlanet = findPlanet(chart, ad.lord);
+            let difficultyType = "";
+            if (adPlanet) {
+              const adH = houseOf(adPlanet.rashi, chart.ascendant.rashi);
+              if (adH === 6) difficultyType = " — health issues, debts, enemies, or legal problems";
+              else if (adH === 8) difficultyType = " — sudden loss, accidents, chronic illness flare-ups, or emotional crisis";
+              else if (adH === 12) difficultyType = " — financial drain, isolation, hospitalization, or forced separation";
+              else if (adH === 2) difficultyType = " — family conflicts or financial strain";
+              else if (adH === 7) difficultyType = " — relationship or partnership troubles";
+              else if (adH === 1) difficultyType = " — health and identity challenges";
+              else difficultyType = " — general obstacles and delays";
+            }
+            const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})${difficultyType}`;
+            if (ad.endDate.getFullYear() <= nowYear) pastEntries.push(entry);
+            else futureEntries.push(entry);
+          }
+        }
+      }
+
+      if (futureEntries.length > 0) {
+        lines.push("\nUPCOMING CHALLENGING PERIODS (what to prepare for):");
+        for (const entry of futureEntries.slice(0, 5)) {
+          lines.push(entry);
+        }
+        lines.push("\nMITIGATION STRATEGIES: During these periods, avoid risky investments, get regular health checkups, maintain strong relationships, and follow the remedies section for the relevant planets.");
+      }
+      if (pastEntries.length > 0) {
+        lines.push("\nPAST CHALLENGING PERIODS (for validation):");
+        lines.push(...pastEntries.slice(-5));
+      }
+
+      // Debilitated planet periods with SPECIFIC difficulty types
       const debPlanets = chart.planets.filter((p) => p.isDebilitated);
       if (debPlanets.length > 0) {
-        lines.push("\nDebilitated planets whose periods may be difficult:");
+        lines.push("\nDEBILITATED PLANETS (periods bring specific struggles):");
         for (const p of debPlanets) {
-          lines.push(`${p.name} is debilitated in ${p.rashiName} — its periods bring struggles related to ${BODY_PART_BY_PLANET[p.name] || "its significations"}.`);
+          const debEffects: Record<string, string> = {
+            Sun: "confidence drops, authority figures become hostile, father figures cause worry, career recognition is blocked despite effort",
+            Moon: "emotional turbulence, mental health concerns, difficulty finding inner peace, mother's health may suffer",
+            Mars: "low energy, courage fails at crucial moments, siblings cause problems, property disputes, accident-prone",
+            Mercury: "poor decisions in business, communication breakdowns, skin or nerve issues, educational setbacks",
+            Jupiter: "financial misjudgments, loss of faith, relationship with children strained, bad advice from mentors",
+            Venus: "love disappointments, financial losses through luxury or women, reproductive health concerns, artistic blocks",
+            Saturn: "career collapses, chronic disease flares, overwhelming responsibilities, loneliness, delayed results in everything",
+          };
+          lines.push(`${p.name} debilitated in ${p.rashiName}: ${debEffects[p.name] || "struggles related to " + (BODY_PART_BY_PLANET[p.name] || "its significations")}.`);
         }
       }
 
@@ -569,10 +937,82 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart) => {
       const lines: string[] = ["WEALTH PERIODS ANALYSIS\n"];
 
+      // --- HOW YOU EARN BEST (2nd lord placement) ---
       const lord2House = houseLordInHouse(chart, 2);
       const lord11House = houseLordInHouse(chart, 11);
-      if (lord2House) lines.push(`2nd lord (wealth) in house ${lord2House}: ${DASHA_LORD_IN_HOUSE[lord2House]}`);
+      if (lord2House) {
+        lines.push(`2nd lord (wealth) in house ${lord2House}: ${DASHA_LORD_IN_HOUSE[lord2House]}`);
+        const earningStyle: Record<number, string> = {
+          1: "You earn best through personal initiative, self-branding, and putting yourself out there. Your personality IS your earning tool.",
+          2: "Wealth accumulates steadily through savings, family business, or inherited financial sense. You have a natural banker's instinct.",
+          3: "You earn through communication — writing, media, sales, marketing, or entrepreneurial ventures requiring courage.",
+          4: "Real estate, vehicles, agriculture, or home-based business bring the best returns. Property is your wealth builder.",
+          5: "Speculation, creative work, education sector, or entertainment generate your best income. Smart risks pay off.",
+          6: "Service sector, healthcare, law, or competitive industries are your money zones. You earn by solving others' problems.",
+          7: "Business partnerships, consulting, client work, or marriage bring financial growth. Others' money flows to you through collaboration.",
+          8: "Insurance, inheritance, joint finances, research, or other people's resources build your wealth. Sudden financial events are common.",
+          9: "Teaching, publishing, international business, law, or spiritual/religious work generate the best income. Fortune favors your finances.",
+          10: "Career and professional achievement are your primary wealth source. The higher you climb, the more you earn.",
+          11: "Networking, large organizations, friends in high places, and social connections bring financial gains. Your network IS your net worth.",
+          12: "Foreign income, exports, online business, or work in isolation (research, writing, spiritual work) generate wealth. Spending wisely is key.",
+        };
+        lines.push(`EARNING STYLE: ${earningStyle[lord2House] || ""}`);
+      }
+
+      // --- SOURCE OF GAINS (11th house planets) ---
+      const planetsIn11 = chart.planets.filter((p) => houseOf(p.rashi, chart.ascendant.rashi) === 11);
+      if (planetsIn11.length > 0) {
+        lines.push("\nSOURCES OF GAINS (planets in 11th house):");
+        for (const p of planetsIn11) {
+          const gainSource: Record<string, string> = {
+            Sun: "Gains through government, authority figures, father, or leadership roles.",
+            Moon: "Gains through public, women, mother, liquids, hospitality, or nurturing professions.",
+            Mars: "Gains through real estate, engineering, military, sports, or competitive fields.",
+            Mercury: "Gains through business, communication, writing, trade, or intellectual work.",
+            Jupiter: "Gains through teaching, finance, law, consulting, or wisdom-based professions. Very auspicious for wealth.",
+            Venus: "Gains through arts, entertainment, luxury goods, women, or beauty industry.",
+            Saturn: "Gains through hard work, labor, manufacturing, or serving the underprivileged. Slow but steady income growth.",
+            Rahu: "Gains through technology, foreign connections, unconventional means, or sudden windfalls.",
+            Ketu: "Gains through spiritual work, research, alternative medicine, or detachment-based wisdom.",
+          };
+          lines.push(`${p.name} in 11th: ${gainSource[p.name] || "Unique gains through " + p.name + "'s energy."}`);
+        }
+      }
       if (lord11House) lines.push(`11th lord (gains) in house ${lord11House}: ${DASHA_LORD_IN_HOUSE[lord11House]}`);
+
+      // --- WINDFALL POTENTIAL (8th house) ---
+      const lord8House = houseLordInHouse(chart, 8);
+      const planetsIn8 = chart.planets.filter((p) => houseOf(p.rashi, chart.ascendant.rashi) === 8);
+      lines.push("\nWINDFALL & SUDDEN WEALTH POTENTIAL:");
+      if (planetsIn8.some((p) => p.name === "Jupiter")) {
+        lines.push("Jupiter in 8th house — strong potential for inheritance, insurance payouts, or spouse's wealth flowing to you. Sudden financial blessings possible.");
+      } else if (planetsIn8.some((p) => p.name === "Venus")) {
+        lines.push("Venus in 8th house — wealth through marriage or partner's resources is likely. Sudden gains through beauty, entertainment, or luxury sectors.");
+      } else if (planetsIn8.some((p) => p.name === "Rahu")) {
+        lines.push("Rahu in 8th house — sudden unexpected money events (both gains and losses). Speculation and joint ventures carry both high reward and high risk.");
+      } else if (lord8House && [2, 11, 9, 5].includes(lord8House)) {
+        lines.push("8th lord connects to wealth houses — occasional windfalls through inheritance, insurance, tax benefits, or partner's resources are indicated.");
+      } else {
+        lines.push("Windfall potential is moderate — steady earning is more reliable for you than relying on sudden gains.");
+      }
+
+      // --- SPENDING TENDENCIES (12th house) ---
+      const lord12House = houseLordInHouse(chart, 12);
+      const planetsIn12 = chart.planets.filter((p) => houseOf(p.rashi, chart.ascendant.rashi) === 12);
+      lines.push("\nSPENDING PATTERN:");
+      if (planetsIn12.some((p) => p.name === "Venus")) {
+        lines.push("Venus in 12th — you spend generously on luxury, comfort, travel, and pleasures. Beautiful things are hard to resist. Budget consciously.");
+      } else if (planetsIn12.some((p) => p.name === "Mars")) {
+        lines.push("Mars in 12th — impulsive spending or expenses through property, vehicles, or medical bills. Channel this into foreign ventures or spiritual pursuits.");
+      } else if (planetsIn12.some((p) => p.name === "Rahu")) {
+        lines.push("Rahu in 12th — spending on foreign travel, unconventional pursuits, or sudden unexpected expenses. Money can slip away if not tracked carefully.");
+      } else if (planetsIn12.some((p) => p.name === "Saturn")) {
+        lines.push("Saturn in 12th — expenses related to long-term commitments, charitable work, or spiritual pursuits. You spend reluctantly but wisely.");
+      } else if (lord12House && [2, 11].includes(lord12House)) {
+        lines.push("12th lord connects to wealth houses — you may spend freely but also replenish. The money circulates rather than stagnating.");
+      } else {
+        lines.push("Spending is generally moderate. No extreme patterns — you manage finances with reasonable balance.");
+      }
 
       // Ashtakavarga for wealth houses
       const sav2 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 1) % 12];
@@ -580,13 +1020,63 @@ export const COMPUTATION_REGISTRY: Record<string, {
       lines.push(`\nAshtakavarga strength: 2nd house = ${sav2} points, 11th house = ${sav11} points.`);
       if (sav2 >= 30) lines.push("2nd house is strong — wealth accumulation is well-supported.");
       if (sav11 >= 30) lines.push("11th house is strong — income and gains flow steadily.");
-      if (sav2 < 25) lines.push("2nd house is weak — wealth accumulation requires extra effort.");
-      if (sav11 < 25) lines.push("11th house is weak — income growth may be slower than desired.");
+      if (sav2 < 25) lines.push("2nd house is weak — wealth accumulation requires extra effort and discipline.");
+      if (sav11 < 25) lines.push("11th house is weak — income growth may be slower, focus on building multiple income streams.");
 
-      // Timing
+      // --- TIMING with financial event type ---
       lines.push("\nKey wealth timing periods:");
-      const periods = timingForHouses(chart, [2, 11, 9, 5]);
-      lines.push(periods.slice(0, 10).join("\n"));
+      const ascSign = chart.ascendant.rashiName;
+      const relevantPlanets = new Set<string>();
+      for (const h of [2, 11, 9, 5]) {
+        const houseRashi = (chart.ascendant.rashi + h - 1) % 12;
+        relevantPlanets.add(RASHI_LORDS[houseRashi]);
+        for (const p of chart.planets) {
+          if (houseOf(p.rashi, chart.ascendant.rashi) === h) relevantPlanets.add(p.name);
+        }
+      }
+
+      const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
+      const nowYear = new Date().getFullYear();
+      const futureEntries: string[] = [];
+      const pastEntries: string[] = [];
+
+      for (const md of chart.vimsottariDasha) {
+        if (!md.antardashas) continue;
+        for (const ad of md.antardashas) {
+          if (ad.startDate.getFullYear() < birthYear + 18) continue;
+          if (ad.startDate.getFullYear() > birthYear + 100) continue;
+          if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
+            const adPlanet = findPlanet(chart, ad.lord);
+            let eventType = "";
+            if (adPlanet) {
+              const adH = houseOf(adPlanet.rashi, chart.ascendant.rashi);
+              const fav = assessDashaFavorability(ad.lord, ascSign, adPlanet.rashi, chart.ascendant.rashi, adPlanet.isExalted, adPlanet.isDebilitated);
+              if (adH === 2 && fav.favorable) eventType = " → steady income growth, savings increase";
+              else if (adH === 11 && fav.favorable) eventType = " → gains, fulfilled financial wishes, income jump";
+              else if (adH === 9 && fav.favorable) eventType = " → fortune shines, lucky money, investments pay off";
+              else if (adH === 5 && fav.favorable) eventType = " → speculative gains, creative income, investment returns";
+              else if (adH === 8) eventType = " → sudden financial events (windfall OR unexpected expense)";
+              else if (adH === 10 && fav.favorable) eventType = " → career-driven income boost, promotion with raise";
+              else if (adH === 7) eventType = " → business profits, partnership income";
+              else if (adH === 12) eventType = " → high expenditure phase, foreign income possible";
+              else if (fav.favorable) eventType = " → positive financial energy";
+              else eventType = " → financial caution advised";
+            }
+            const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})${eventType}`;
+            if (ad.endDate.getFullYear() <= nowYear) pastEntries.push(entry);
+            else futureEntries.push(entry);
+          }
+        }
+      }
+
+      if (futureEntries.length > 0) {
+        lines.push("UPCOMING PERIODS:");
+        lines.push(...futureEntries.slice(0, 5));
+      }
+      if (pastEntries.length > 0) {
+        lines.push("\nPAST PERIODS:");
+        lines.push(...pastEntries.slice(-3));
+      }
 
       return lines.join("\n");
     },
@@ -665,6 +1155,7 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart) => {
       const lines: string[] = ["CURRENT PERIOD ANALYSIS\n"];
       const ascSign = chart.ascendant.rashiName;
+      const now = new Date();
 
       const currentMD = getCurrentDasha(chart.vimsottariDasha);
       if (!currentMD) {
@@ -681,9 +1172,9 @@ export const COMPUTATION_REGISTRY: Record<string, {
       }
 
       // Current antardasha
+      let currentAD: DashaPeriod | undefined;
       if (currentMD.antardashas) {
-        const now = new Date();
-        const currentAD = currentMD.antardashas.find((ad) => now >= ad.startDate && now <= ad.endDate);
+        currentAD = currentMD.antardashas.find((ad) => now >= ad.startDate && now <= ad.endDate);
         if (currentAD) {
           const adPlanet = findPlanet(chart, currentAD.lord);
           if (adPlanet) {
@@ -695,15 +1186,86 @@ export const COMPUTATION_REGISTRY: Record<string, {
           }
         }
 
-        // Next 2-3 antardashas
+        // --- PRATYANTARDASHA (sub-sub period) — what's happening THIS month ---
+        if (currentAD?.antardashas) {
+          const currentPAD = currentAD.antardashas.find((pad) => now >= pad.startDate && now <= pad.endDate);
+          if (currentPAD) {
+            const padPlanet = findPlanet(chart, currentPAD.lord);
+            if (padPlanet) {
+              const padHouse = houseOf(padPlanet.rashi, chart.ascendant.rashi);
+              const padStart = currentPAD.startDate.toLocaleString("en", { month: "short", day: "numeric" });
+              const padEnd = currentPAD.endDate.toLocaleString("en", { month: "short", day: "numeric", year: "numeric" });
+              lines.push(`\nTHIS MONTH'S FOCUS (Pratyantardasha): ${currentPAD.lord} (${padStart} to ${padEnd})`);
+              lines.push(`${currentPAD.lord} activates house ${padHouse}: ${DASHA_LORD_IN_HOUSE[padHouse]}`);
+            }
+          }
+
+          // Next pratyantardasha — what's shifting soon
+          const nextPADs = currentAD.antardashas.filter((pad) => pad.startDate > now).slice(0, 2);
+          if (nextPADs.length > 0) {
+            lines.push("\nCOMING UP IN THE NEXT FEW MONTHS:");
+            for (const pad of nextPADs) {
+              const padPlanet = findPlanet(chart, pad.lord);
+              if (padPlanet) {
+                const padHouse = houseOf(padPlanet.rashi, chart.ascendant.rashi);
+                const padStart = pad.startDate.toLocaleString("en", { month: "short", year: "numeric" });
+                lines.push(`${pad.lord} from ${padStart}: shifts focus to house ${padHouse} — ${DASHA_LORD_IN_HOUSE[padHouse]}`);
+              }
+            }
+          }
+        }
+
+        // --- KEY THEMES: career, relationships, health, money — what's active NOW ---
+        lines.push("\nACTIVE LIFE THEMES RIGHT NOW:");
+        const mdH = mdPlanet ? houseOf(mdPlanet.rashi, chart.ascendant.rashi) : 0;
+        const adH = currentAD ? (() => { const ap = findPlanet(chart, currentAD!.lord); return ap ? houseOf(ap.rashi, chart.ascendant.rashi) : 0; })() : 0;
+        const activeHouses = new Set([mdH, adH]);
+
+        const themes: string[] = [];
+        if (activeHouses.has(10) || activeHouses.has(6)) themes.push("CAREER is strongly activated — expect professional changes, new responsibilities, or work-related decisions.");
+        if (activeHouses.has(7) || activeHouses.has(2)) themes.push("RELATIONSHIPS are in focus — marriage, partnerships, or family dynamics demand attention.");
+        if (activeHouses.has(1) || activeHouses.has(8)) themes.push("HEALTH and personal transformation are key themes — pay attention to your body and inner changes.");
+        if (activeHouses.has(11) || activeHouses.has(5)) themes.push("MONEY and creative fulfillment are active — gains, investments, or creative projects are energized.");
+        if (activeHouses.has(9) || activeHouses.has(12)) themes.push("SPIRITUAL growth and inner journey are calling — travel, learning, or meditation may draw you.");
+        if (activeHouses.has(4)) themes.push("HOME and domestic matters need attention — property, family, mother, or emotional foundations.");
+        if (activeHouses.has(3)) themes.push("COMMUNICATION and initiative are highlighted — writing, short trips, courage, and self-expression.");
+        if (themes.length > 0) lines.push(themes.join("\n"));
+
+        // --- WHAT TO FOCUS ON vs WHAT TO AVOID ---
+        if (mdPlanet) {
+          const funcData = FUNCTIONAL_BENEFICS_MALEFICS[ascSign];
+          const isBeneficMD = funcData?.benefics.includes(currentMD.lord) || funcData?.yogakaraka === currentMD.lord;
+          if (isBeneficMD) {
+            lines.push("\nFOCUS ON: Taking initiative, making investments, starting new ventures, and pushing forward. The major period supports your efforts.");
+          } else {
+            lines.push("\nFOCUS ON: Caution, patience, and consolidation. Avoid major risks or confrontations. Use this time to build resilience and inner strength.");
+          }
+        }
+
+        // --- ENERGY LEVEL AND MENTAL STATE ---
+        const moon = findPlanet(chart, "Moon");
+        if (moon) {
+          const moonH = houseOf(moon.rashi, chart.ascendant.rashi);
+          if ([6, 8, 12].includes(moonH)) {
+            lines.push("\nMENTAL & EMOTIONAL STATE: Moon's placement suggests emotional sensitivity may be heightened. Make time for self-care, rest, and emotional processing. Meditation or journaling helps.");
+          } else if ([1, 5, 9, 11].includes(moonH)) {
+            lines.push("\nMENTAL & EMOTIONAL STATE: Moon's placement supports emotional stability and optimism. Your intuition is generally reliable, and your mood supports productive action.");
+          } else {
+            lines.push("\nMENTAL & EMOTIONAL STATE: Emotional energy is moderate. Stay connected to supportive people and maintain healthy routines for best results.");
+          }
+        }
+
+        // Next 2-3 antardashas — what's changing in the next 3-6 months
         const futureADs = currentMD.antardashas.filter((ad) => ad.startDate > now).slice(0, 3);
         if (futureADs.length > 0) {
-          lines.push("\nUPCOMING SUB-PERIODS:");
+          lines.push("\nWHAT'S CHANGING — UPCOMING SUB-PERIODS:");
           for (const ad of futureADs) {
             const adPlanet = findPlanet(chart, ad.lord);
             if (adPlanet) {
-              const adHouse = houseOf(adPlanet.rashi, chart.ascendant.rashi);
-              lines.push(`${ad.lord} (${periodStr(ad)}): House ${adHouse} focus. ${DASHA_LORD_IN_HOUSE[adHouse]}`);
+              const futAdHouse = houseOf(adPlanet.rashi, chart.ascendant.rashi);
+              const fav = assessDashaFavorability(ad.lord, ascSign, adPlanet.rashi, chart.ascendant.rashi, adPlanet.isExalted, adPlanet.isDebilitated);
+              const startMonth = ad.startDate.toLocaleString("en", { month: "short", year: "numeric" });
+              lines.push(`${ad.lord} (from ${startMonth}): House ${futAdHouse} focus. ${DASHA_LORD_IN_HOUSE[futAdHouse]} ${fav.favorable ? "A positive shift." : "A period requiring patience."}`);
             }
           }
         }
@@ -728,23 +1290,107 @@ export const COMPUTATION_REGISTRY: Record<string, {
         lines.push(ascTraits.personality);
       }
 
-      // Moon sign and nakshatra
-      lines.push(`\nMOON SIGN — ${chart.moonSign}:`);
+      // Moon sign and nakshatra — DETAILED
+      lines.push(`\nMOON SIGN — ${chart.moonSign} (your emotional core):`);
       const moonTraits = RASHI_DETAILED_TRAITS[chart.moonSign];
       if (moonTraits) lines.push(moonTraits.personality);
 
       const nakshatraDesc = NAKSHATRA_PERSONALITIES[chart.moonNakshatra];
       if (nakshatraDesc) {
-        lines.push(`\nMOON NAKSHATRA — ${chart.moonNakshatra}:`);
+        lines.push(`\nMOON NAKSHATRA — ${chart.moonNakshatra} (your deepest behavioral pattern):`);
         lines.push(nakshatraDesc);
       }
 
       // Sun sign
-      lines.push(`\nSUN SIGN — ${chart.sunSign}:`);
+      lines.push(`\nSUN SIGN — ${chart.sunSign} (your soul's expression):`);
       const sunPlanet = findPlanet(chart, "Sun");
       if (sunPlanet) {
         const sunHouse = houseOf(sunPlanet.rashi, chart.ascendant.rashi);
         lines.push(PLANET_IN_HOUSE_MEANING["Sun"]?.[sunHouse] || "");
+      }
+
+      // --- ATMAKARAKA — soul's deepest desire ---
+      const ak = chart.charaKarakas.find((ck) => ck.karaka === "AK" || ck.karaka === "Atmakaraka");
+      if (ak) {
+        lines.push(`\nSOUL'S DEEPEST DESIRE (Atmakaraka: ${ak.planet}):`);
+        const akMeaning: Record<string, string> = {
+          Sun: "Your soul craves respect, recognition, and the ability to lead authentically. The deepest lesson is learning to shine without needing others' approval — finding your inner authority.",
+          Moon: "Your soul yearns for emotional security, nurturing, and deep connection. The lesson is learning to give care without losing yourself — finding peace within, regardless of external circumstances.",
+          Mars: "Your soul burns to prove its courage, fight for justice, and take decisive action. The lesson is channeling passion without aggression — using strength to protect rather than dominate.",
+          Mercury: "Your soul is driven to learn, communicate, and understand the world intellectually. The lesson is using knowledge wisely — not just accumulating information but distilling it into true wisdom.",
+          Jupiter: "Your soul seeks wisdom, meaning, and the role of guide or teacher. The lesson is living your values rather than just preaching them — becoming the wisdom you seek to share.",
+          Venus: "Your soul desires love, beauty, harmony, and creative expression. The lesson is finding true beauty beyond appearances — learning that the deepest love requires vulnerability and honesty.",
+          Saturn: "Your soul is here to learn patience, discipline, and service through hardship. This is one of the most spiritually advanced placements — the lesson is accepting responsibility without resentment and finding freedom within structure.",
+          Rahu: "Your soul is driven by an intense, almost obsessive desire to experience something new and unconventional. The lesson is pursuing ambition without losing your moral compass.",
+        };
+        lines.push(akMeaning[ak.planet] || `${ak.planet} as Atmakaraka gives your soul a unique quest for mastery in ${ak.planet}'s domain.`);
+      }
+
+      // --- HOW OTHERS PERCEIVE YOU (from Arudha Lagna) ---
+      const al = chart.arudhaPadas.find((a) => a.house === 1);
+      if (al) {
+        const alHouse = houseOf(al.padaRashi, chart.ascendant.rashi);
+        lines.push(`\nHOW THE WORLD SEES YOU (Arudha Lagna in house ${alHouse}):`);
+        const alPerception: Record<number, string> = {
+          1: "What you see is what you get — your public image matches your true self. People perceive you as authentic and straightforward.",
+          2: "People see you as wealthy, well-spoken, or family-oriented, regardless of your actual finances. You project stability and values.",
+          3: "You come across as bold, communicative, and entrepreneurial. People see a doer who takes initiative.",
+          4: "People perceive you as comfortable, well-settled, and emotionally grounded. You project domestic success and inner peace.",
+          5: "You appear creative, intelligent, and lucky. People see you as someone with natural talent and a bright mind.",
+          6: "You may appear as someone who overcomes enemies and obstacles. People see a fighter and problem-solver.",
+          7: "You project partnership energy — people see you through your relationships and public dealings. You appear socially connected.",
+          8: "There is mystery about your public image. People sense depth, power, or hidden resources in you.",
+          9: "You appear fortunate, wise, and connected to higher principles. People see a philosophical or spiritual quality in you.",
+          10: "You project career success and authority. People see you as accomplished, powerful, and action-oriented.",
+          11: "You appear well-connected, affluent, and socially influential. People see someone who achieves their goals.",
+          12: "You may appear detached, spiritual, or connected to foreign lands. There is an elusive, other-worldly quality to your image.",
+        };
+        lines.push(alPerception[alHouse] || "Your public image has a unique, complex quality.");
+      }
+
+      // --- HIDDEN TALENTS (from 5th house and its lord) ---
+      const lord5H = houseLordInHouse(chart, 5);
+      const planetsIn5 = chart.planets.filter((p) => houseOf(p.rashi, chart.ascendant.rashi) === 5);
+      lines.push("\nHIDDEN TALENTS & CREATIVE GIFTS:");
+      if (planetsIn5.length > 0) {
+        for (const p of planetsIn5) {
+          const talentMap: Record<string, string> = {
+            Sun: "Natural leadership in creative or educational settings. You can inspire and mentor others powerfully.",
+            Moon: "Deep emotional intelligence and intuition. You may have a gift for storytelling, nurturing, or understanding people's unspoken needs.",
+            Mars: "Competitive edge in creative fields. Talent for sports, engineering, or any pursuit requiring physical or mental courage.",
+            Mercury: "Outstanding communication ability — writing, speaking, analysis, or coding. Your mind is a powerful creative tool.",
+            Jupiter: "Wisdom and teaching ability. You naturally guide others and may have talent in philosophy, finance, or counseling.",
+            Venus: "Strong artistic sensibility — music, art, design, or aesthetic pursuits. Romantic creativity flows naturally.",
+            Saturn: "Disciplined creative approach. You build lasting things — whether art, structures, or systems. Late-blooming but enduring talent.",
+            Rahu: "Unconventional creative vision. You think outside the box and may innovate in technology, media, or avant-garde fields.",
+            Ketu: "Intuitive, spiritual creativity. Past-life talents may surface — you may be naturally good at things without formal training.",
+          };
+          lines.push(`${p.name} in 5th house: ${talentMap[p.name] || "Unique creative expression through " + p.name + "'s energy."}`);
+        }
+      } else if (lord5H) {
+        lines.push(`5th lord in house ${lord5H}: Your creative and intellectual gifts express through ${DASHA_LORD_IN_HOUSE[lord5H]?.split(".")[0].toLowerCase() || "this life area"}.`);
+      }
+
+      // --- BIGGEST LIFE LESSON (from Saturn's house) ---
+      const saturn = findPlanet(chart, "Saturn");
+      if (saturn) {
+        const satHouse = houseOf(saturn.rashi, chart.ascendant.rashi);
+        lines.push(`\nBIGGEST LIFE LESSON (Saturn in house ${satHouse}):`);
+        const satLesson: Record<number, string> = {
+          1: "Learning self-discipline, patience with your own growth, and that true strength comes from enduring rather than forcing. You are here to master yourself.",
+          2: "Learning that real wealth comes slowly and must be earned. Financial discipline and valuing what truly matters over superficial possessions.",
+          3: "Learning that true courage means persisting when communication fails and efforts seem fruitless. Your voice strengthens over time.",
+          4: "Learning to find inner peace despite difficult domestic or emotional circumstances. Home and happiness come through patient building.",
+          5: "Learning that creativity and joy require discipline, not just inspiration. Parenthood or creative work may teach deep patience.",
+          6: "Learning to serve without resentment, handle enemies with patience, and manage health through consistent routines.",
+          7: "Learning that lasting relationships require commitment through difficult times. Marriage or partnerships teach you about patience and compromise.",
+          8: "Learning to face transformation, loss, and the unknown with courage. You become stronger through every crisis you survive.",
+          9: "Learning that wisdom comes through lived experience, not just beliefs. Your philosophy of life is tested and strengthened through hardship.",
+          10: "Learning that career success is a marathon, not a sprint. Your greatest achievements come later in life through relentless perseverance.",
+          11: "Learning that true fulfillment comes from realistic goals and genuine friendships rather than chasing every dream. Quality over quantity.",
+          12: "Learning to let go, find peace in solitude, and accept that some things are beyond your control. Spiritual maturity through surrender.",
+        };
+        lines.push(satLesson[satHouse] || "Saturn teaches patience and discipline through this area of life.");
       }
 
       // Key planet strengths/weaknesses
@@ -782,30 +1428,72 @@ export const COMPUTATION_REGISTRY: Record<string, {
     compute: (chart) => {
       const lines: string[] = ["HEALTH ANALYSIS\n"];
 
-      // Constitution
+      // Constitution with RECOMMENDATIONS
       const ascTraits = RASHI_DETAILED_TRAITS[chart.ascendant.rashiName];
       if (ascTraits) {
         lines.push(`Constitution: ${ascTraits.constitution} type`);
         lines.push(`Primary vulnerable area: ${ascTraits.bodyPart}`);
+
+        // Constitution-specific health advice
+        const constitutionAdvice: Record<string, string> = {
+          Pitta: "HEALTH PRACTICES FOR YOUR CONSTITUTION: Cool down your system — avoid excessive spicy food, alcohol, and overheating. Favor cooling foods (cucumber, coconut water, milk), moderate exercise (swimming, walking), and stress management. Avoid working in extreme heat. Meditation calms your naturally fiery mind. Best exercise time: early morning before it gets hot.",
+          Vata: "HEALTH PRACTICES FOR YOUR CONSTITUTION: Ground and warm yourself — avoid irregular routines, cold dry food, and excessive travel. Favor warm, cooked, oily foods, regular sleep schedules, and gentle, grounding exercise (yoga, walking, tai chi). Oil massage (abhyanga) is excellent for you. Avoid overthinking and over-scheduling.",
+          Kapha: "HEALTH PRACTICES FOR YOUR CONSTITUTION: Stay active and light — avoid heavy food, oversleeping, and sedentary habits. Favor light, spicy, warm foods, vigorous daily exercise, and stimulating activities. You have natural endurance but must fight inertia. Best exercise: running, hiking, competitive sports. Avoid dairy excess and sleeping past sunrise.",
+        };
+        if (constitutionAdvice[ascTraits.constitution]) {
+          lines.push(`\n${constitutionAdvice[ascTraits.constitution]}`);
+        }
       }
 
-      // 6th house (disease) analysis
+      // --- SPECIFIC BODY PARTS TO WATCH (from 6th lord house placement) ---
       const lord6House = houseLordInHouse(chart, 6);
       if (lord6House !== null) {
-        lines.push(`\n6th lord (disease indicator) in house ${lord6House}: ${BODY_PART_BY_HOUSE[lord6House]} may need attention.`);
+        lines.push(`\nDISEASE INDICATORS (6th lord in house ${lord6House}):`);
+        lines.push(`Body area to watch: ${BODY_PART_BY_HOUSE[lord6House]}.`);
+        // Also note the 6th lord planet itself
+        const house6Rashi = (chart.ascendant.rashi + 5) % 12;
+        const lord6Name = RASHI_LORDS[house6Rashi];
+        if (BODY_PART_BY_PLANET[lord6Name]) {
+          lines.push(`${lord6Name} as 6th lord also indicates vulnerability in: ${BODY_PART_BY_PLANET[lord6Name]}.`);
+        }
       }
 
       // 8th house (chronic illness) analysis
       const lord8House = houseLordInHouse(chart, 8);
       if (lord8House !== null) {
-        lines.push(`8th lord (chronic conditions) in house ${lord8House}: Watch ${BODY_PART_BY_HOUSE[lord8House]}.`);
+        lines.push(`\nCHRONIC HEALTH INDICATORS (8th lord in house ${lord8House}): Watch ${BODY_PART_BY_HOUSE[lord8House]}. Chronic or recurring issues may relate to this area.`);
+      }
+
+      // --- MENTAL HEALTH INDICATORS ---
+      const moon = findPlanet(chart, "Moon");
+      lines.push("\nMENTAL HEALTH PROFILE:");
+      if (moon) {
+        const moonH = houseOf(moon.rashi, chart.ascendant.rashi);
+        const moonStrong = moon.isExalted || [1, 4, 5, 7, 9, 10, 11].includes(moonH);
+        const moonWeak = moon.isDebilitated || isInMKS(chart, "Moon") || [6, 8, 12].includes(moonH);
+
+        if (moonWeak) {
+          lines.push(`Moon is ${moon.isDebilitated ? "debilitated" : isInMKS(chart, "Moon") ? "in Marana Karaka Sthana" : "in a challenging house"} — emotional health needs conscious attention. You may be prone to anxiety, mood swings, or periods of emotional heaviness. Regular practices like meditation, spending time near water, and connecting with nurturing people are essential.`);
+        } else if (moonStrong) {
+          lines.push(`Moon is well-placed — your emotional resilience is naturally strong. You recover from stress relatively well and have good intuitive awareness of your mental state.`);
+        } else {
+          lines.push("Moon is in a moderate position — mental health is generally stable but benefits from regular emotional check-ins, good sleep habits, and stress management routines.");
+        }
+
+        // 4th house (inner peace)
+        const sav4 = chart.ashtakavarga.sarva[(chart.ascendant.rashi + 3) % 12];
+        if (sav4 < 22) {
+          lines.push("4th house (inner peace) is weak in Ashtakavarga — finding emotional security and peace of mind may require extra effort. Create a calming home environment.");
+        } else if (sav4 >= 30) {
+          lines.push("4th house (inner peace) is strong — your home environment and emotional foundations support mental wellness well.");
+        }
       }
 
       // MKS planets — health vulnerabilities
       const mksIssues: string[] = [];
       for (const p of chart.planets) {
         if (isInMKS(chart, p.name)) {
-          mksIssues.push(`${p.name} in MKS: Vulnerable to ${BODY_PART_BY_PLANET[p.name]}. Take preventive care.`);
+          mksIssues.push(`${p.name} in MKS: Vulnerable to ${BODY_PART_BY_PLANET[p.name]}. Take preventive care — regular checkups and early intervention are key.`);
         }
       }
       if (mksIssues.length > 0) {
@@ -818,6 +1506,25 @@ export const COMPUTATION_REGISTRY: Record<string, {
         const house = houseOf(p.rashi, chart.ascendant.rashi);
         if (house === 6) lines.push(`\n${p.name} in 6th house: Health issues related to ${BODY_PART_BY_PLANET[p.name]}.`);
         if (house === 8) lines.push(`\n${p.name} in 8th house: Chronic issues possible related to ${BODY_PART_BY_PLANET[p.name]}.`);
+      }
+
+      // --- CURRENT HEALTH ENERGY from running dasha ---
+      const currentMD = getCurrentDasha(chart.vimsottariDasha);
+      if (currentMD) {
+        const mdPlanet = findPlanet(chart, currentMD.lord);
+        if (mdPlanet) {
+          const mdHouse = houseOf(mdPlanet.rashi, chart.ascendant.rashi);
+          lines.push("\nCURRENT HEALTH ENERGY:");
+          if ([6, 8].includes(mdHouse)) {
+            lines.push(`Your current ${currentMD.lord} period activates house ${mdHouse} — this is a health-sensitive phase. Be proactive about checkups, diet, and exercise. Do not ignore minor symptoms.`);
+          } else if ([1, 5, 9].includes(mdHouse)) {
+            lines.push(`Your current ${currentMD.lord} period activates house ${mdHouse} — health energy is generally positive. Your vitality supports an active lifestyle.`);
+          } else if (mdHouse === 12) {
+            lines.push(`Your current ${currentMD.lord} period activates the 12th house — watch for sleep disturbances, immune system dips, or hospitalization triggers. Rest and recovery are important.`);
+          } else {
+            lines.push(`Your current ${currentMD.lord} period is not primarily health-focused, but maintain regular health routines.`);
+          }
+        }
       }
 
       // Health timing
@@ -1155,31 +1862,62 @@ export const COMPUTATION_REGISTRY: Record<string, {
       const problemArea = params?.problem_area || "general";
 
       // Map problem areas to relevant houses and planets
-      const problemMap: Record<string, { houses: number[]; karakas: string[] }> = {
-        marriage: { houses: [7, 2], karakas: ["Venus"] },
-        career: { houses: [10, 6], karakas: ["Saturn", "Sun"] },
-        health: { houses: [1, 6, 8], karakas: ["Sun", "Moon"] },
-        wealth: { houses: [2, 11], karakas: ["Jupiter"] },
-        children: { houses: [5], karakas: ["Jupiter"] },
-        education: { houses: [4, 5], karakas: ["Mercury", "Jupiter"] },
-        spiritual: { houses: [9, 12], karakas: ["Jupiter", "Ketu"] },
-        general: { houses: [1, 9], karakas: ["Jupiter", "Sun"] },
+      const problemMap: Record<string, { houses: number[]; karakas: string[]; description: string }> = {
+        marriage: { houses: [7, 2], karakas: ["Venus"], description: "marriage, relationships, and partnership" },
+        career: { houses: [10, 6], karakas: ["Saturn", "Sun"], description: "career, professional growth, and recognition" },
+        health: { houses: [1, 6, 8], karakas: ["Sun", "Moon"], description: "health, vitality, and physical well-being" },
+        wealth: { houses: [2, 11], karakas: ["Jupiter"], description: "wealth, income, and financial growth" },
+        children: { houses: [5], karakas: ["Jupiter"], description: "children, fertility, and parenthood" },
+        education: { houses: [4, 5], karakas: ["Mercury", "Jupiter"], description: "education, learning, and intellectual growth" },
+        spiritual: { houses: [9, 12], karakas: ["Jupiter", "Ketu"], description: "spiritual growth, inner peace, and divine connection" },
+        general: { houses: [1, 9], karakas: ["Jupiter", "Sun"], description: "overall life improvement and well-being" },
       };
 
       const config = problemMap[problemArea] || problemMap.general;
+      lines.push(`FOCUS AREA: ${config.description}\n`);
 
-      // Find the weakest planet related to the problem
+      // --- IDENTIFY THE WEAKEST PLANET ---
       const relevantPlanets: string[] = [...config.karakas];
       for (const h of config.houses) {
         const houseRashi = (chart.ascendant.rashi + h - 1) % 12;
         relevantPlanets.push(RASHI_LORDS[houseRashi]);
       }
 
+      // Score each relevant planet to find the weakest
+      let weakestPlanet = "";
+      let weakestScore = 100;
+      const seen = new Set<string>();
+      for (const pName of relevantPlanets) {
+        if (seen.has(pName)) continue;
+        seen.add(pName);
+        const planet = findPlanet(chart, pName);
+        if (!planet) continue;
+        let score = 50; // baseline
+        if (planet.isExalted) score += 30;
+        if (planet.isDebilitated) score -= 30;
+        if (isInMKS(chart, pName)) score -= 25;
+        if (planet.isRetrograde) score -= 5;
+        const house = houseOf(planet.rashi, chart.ascendant.rashi);
+        if ([6, 8, 12].includes(house)) score -= 15;
+        if ([1, 5, 9].includes(house)) score += 10;
+        if (funcData?.malefics.includes(pName)) score -= 10;
+        if (funcData?.benefics.includes(pName)) score += 10;
+        if (score < weakestScore) { weakestScore = score; weakestPlanet = pName; }
+      }
+
+      if (weakestPlanet) {
+        const wp = findPlanet(chart, weakestPlanet);
+        const wpHouse = wp ? houseOf(wp.rashi, chart.ascendant.rashi) : 0;
+        lines.push(`MOST PROBLEMATIC PLANET FOR ${problemArea.toUpperCase()}: ${weakestPlanet}`);
+        lines.push(`Currently placed in house ${wpHouse}${wp?.isDebilitated ? " (debilitated)" : ""}${isInMKS(chart, weakestPlanet) ? " (in Marana Karaka Sthana)" : ""}${wp?.isRetrograde ? " (retrograde)" : ""}.`);
+        lines.push(`This planet needs the most attention for improvement in ${config.description}.\n`);
+      }
+
       // Recommend strengthening functional benefics, propitiating malefics
       const beneficRemedies: string[] = [];
       const maleficRemedies: string[] = [];
 
-      const seen = new Set<string>();
+      seen.clear();
       for (const pName of relevantPlanets) {
         if (seen.has(pName)) continue;
         seen.add(pName);
@@ -1190,22 +1928,37 @@ export const COMPUTATION_REGISTRY: Record<string, {
         const planet = findPlanet(chart, pName);
         const isWeak = planet ? (planet.isDebilitated || isInMKS(chart, pName)) : false;
 
+        // Determine best day to start wearing gemstone
+        const dayMap: Record<string, string> = {
+          Sun: "Sunday at sunrise", Moon: "Monday during Shukla Paksha (waxing moon)",
+          Mars: "Tuesday morning", Mercury: "Wednesday morning",
+          Jupiter: "Thursday morning", Venus: "Friday morning",
+          Saturn: "Saturday evening", Rahu: "Saturday during Rahu Kala", Ketu: "Tuesday or Saturday",
+        };
+
         if (isBenefic || isWeak) {
           beneficRemedies.push(
             `STRENGTHEN ${pName}:\n` +
-            `  Gemstone: ${remedy.gemstone} (wear on ${remedy.finger} in ${remedy.metal})\n` +
-            `  Mantra: ${remedy.mantra}\n` +
-            `  Deity: ${remedy.deity}\n` +
-            `  Color: ${remedy.color}\n` +
-            `  Good deeds: ${remedy.good_deeds}`
+            `  Gemstone: ${remedy.gemstone}\n` +
+            `    - Wear on: ${remedy.finger}\n` +
+            `    - Metal: ${remedy.metal}\n` +
+            `    - Best day to start: ${dayMap[pName] || remedy.fasting_day}\n` +
+            `    - Minimum weight: ${pName === "Jupiter" || pName === "Venus" ? "2 carats" : pName === "Sun" ? "3 carats" : "3-5 carats"}\n` +
+            `  Mantra: "${remedy.mantra}"\n` +
+            `    - Recite ${pName === "Saturn" || pName === "Rahu" ? "23,000" : pName === "Sun" ? "7,000" : "11,000"} times for full effect, or 108 times daily\n` +
+            `  Deity: ${remedy.deity} — worship regularly, especially on ${remedy.fasting_day}s\n` +
+            `  Fasting: ${remedy.fasting_day} — even a partial fast (one meal) helps\n` +
+            `  Color to favor: ${remedy.color} — wear this color on ${remedy.fasting_day}s\n` +
+            `  Charity: ${remedy.good_deeds}`
           );
         } else {
           maleficRemedies.push(
-            `PROPITIATE ${pName}:\n` +
-            `  Mantra: ${remedy.mantra}\n` +
-            `  Fasting: ${remedy.fasting_day}\n` +
-            `  Deity: ${remedy.deity}\n` +
-            `  Good deeds: ${remedy.good_deeds}`
+            `PROPITIATE ${pName} (do NOT wear its gemstone — it would amplify problems):\n` +
+            `  Mantra: "${remedy.mantra}" — recite 108 times daily, especially on ${remedy.fasting_day}s\n` +
+            `  Fasting: Observe a fast on ${remedy.fasting_day} — even skipping one meal counts\n` +
+            `  Deity: ${remedy.deity} — regular worship helps pacify this planet\n` +
+            `  Charity: ${remedy.good_deeds}\n` +
+            `  Color to avoid: ${remedy.color} (for malefic planets, avoid their color rather than favor it)`
           );
         }
       }
@@ -1216,8 +1969,29 @@ export const COMPUTATION_REGISTRY: Record<string, {
       }
 
       if (maleficRemedies.length > 0) {
-        lines.push("\nPROPITIATION (for challenging planets — no gemstones, use mantras & charity):\n");
+        lines.push("\nPROPITIATION (for challenging planets — mantras & charity, not gemstones):\n");
         lines.push(maleficRemedies.join("\n\n"));
+      }
+
+      // --- QUICK DAILY PRACTICE ---
+      lines.push("\nQUICK DAILY PRACTICE:");
+      if (weakestPlanet) {
+        const wr = REMEDIES[weakestPlanet];
+        if (wr) {
+          lines.push(`Since ${weakestPlanet} needs the most support, your minimum daily practice is:`);
+          lines.push(`1. Recite "${wr.mantra}" 108 times (takes about 10 minutes)`);
+          lines.push(`2. Wear ${wr.color} on ${wr.fasting_day}s`);
+          lines.push(`3. ${wr.good_deeds.split(".")[0]}`);
+        }
+      }
+
+      // --- YOGAKARAKA BOOST ---
+      if (funcData?.yogakaraka) {
+        const ykRemedy = REMEDIES[funcData.yogakaraka];
+        if (ykRemedy) {
+          lines.push(`\nSPECIAL BOOST — YOGAKARAKA ${funcData.yogakaraka}:`);
+          lines.push(`For ${ascSign} ascendant, ${funcData.yogakaraka} is your Yogakaraka (most powerful benefic). Strengthening it through ${ykRemedy.gemstone} gemstone and worship of ${ykRemedy.deity} amplifies ALL positive areas of your life — not just ${problemArea}.`);
+        }
       }
 
       return lines.join("\n");
