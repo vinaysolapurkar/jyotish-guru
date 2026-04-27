@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateBirthChart, BirthChartData } from "@/lib/astrology";
 import { COMPUTATION_REGISTRY } from "@/lib/computation-registry";
+import { saveChartSVG } from "@/lib/chart-image";
+import { readFileSync } from "fs";
 
 // --- Constants ---
 const FREE_MESSAGES_PER_DAY = 5;
@@ -27,6 +29,23 @@ function sendTyping(chatId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, action: "typing" }),
   }).catch(() => {});
+}
+
+async function sendChartImage(chatId: string, chart: BirthChartData, name?: string) {
+  try {
+    const svgPath = saveChartSVG(chart, name || undefined);
+    const svgData = readFileSync(svgPath);
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("document", new Blob([svgData], { type: "image/svg+xml" }), "birth-chart.svg");
+    form.append("caption", "Your Birth Chart (South Indian Style)");
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+      method: "POST",
+      body: form,
+    });
+  } catch (e) {
+    console.error("Chart image error:", e);
+  }
 }
 
 // --- DeepSeek (single call) ---
@@ -154,6 +173,9 @@ async function sendInitialReading(
 ) {
   try {
     const chart = calculateBirthChart(birthDate, birthTime, lat, lon);
+    // Send chart image first
+    await sendChartImage(chatId, chart, userName || undefined);
+
     const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
     const topYogas = chart.yogas.slice(0, 3).map(y => y.split(":")[0]).join(", ");
 
@@ -361,9 +383,10 @@ export async function POST(req: NextRequest) {
     // 2. Run server-side computations
     const { results, chartSummary } = runComputations(questionTypes, user.birthDate, user.birthTime, user.latitude, user.longitude);
 
-    // 3. Send chart details FIRST (shows the science)
-    const chartMsg = `Your Chart:\n${chartSummary}`;
-    await send(chatId, chartMsg);
+    // 3. Send chart image + details FIRST (shows the science)
+    const fullChart = calculateBirthChart(user.birthDate, user.birthTime, user.latitude, user.longitude);
+    await sendChartImage(chatId, fullChart, user.name || undefined);
+    await send(chatId, `Your Chart:\n${chartSummary}`);
 
     // 4. Build prompt with minimal history, call AI once
     sendTyping(chatId);
