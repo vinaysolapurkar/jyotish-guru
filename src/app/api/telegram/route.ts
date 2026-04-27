@@ -77,14 +77,18 @@ function parseDate(input: string): string | null {
 }
 
 function parseTime(input: string): string | null {
-  const t = input.trim();
-  const m = t.match(/^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/i);
+  const t = input.trim().toLowerCase().replace(/\./g, ":");
+
+  // Match formats: "7am", "7 am", "7:30am", "7:30 am", "07:30", "7", "19", "7:30pm", "7.30 pm"
+  const m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
   if (!m) return null;
   let hours = parseInt(m[1]);
-  const minutes = parseInt(m[2]);
+  const minutes = parseInt(m[2] || "0");
   const ampm = m[3]?.toLowerCase();
   if (ampm === "pm" && hours < 12) hours += 12;
   if (ampm === "am" && hours === 12) hours = 0;
+  // If no am/pm and hours <= 12, assume AM for morning times (common in India)
+  if (!ampm && hours > 0 && hours <= 6) hours += 0; // early morning stays as-is
   if (hours > 23 || minutes > 59) return null;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
@@ -175,9 +179,32 @@ async function sendInitialReading(
   }
 }
 
+// --- Chart summary for showing the science ---
+function buildChartSummary(chart: BirthChartData): string {
+  const currentDasha = chart.vimsottariDasha.find(d => new Date() >= d.startDate && new Date() <= d.endDate);
+  const currentAD = currentDasha?.antardashas?.find(a => new Date() >= a.startDate && new Date() <= a.endDate);
+  const planets = chart.planets.map(p => {
+    let s = `${p.name}: ${p.rashiName}`;
+    if (p.isExalted) s += " (exalted)";
+    if (p.isDebilitated) s += " (debilitated)";
+    if (p.isRetrograde) s += " (R)";
+    return s;
+  }).join("\n");
+  return [
+    `Ascendant: ${chart.ascendant.rashiName}`,
+    `Sun Sign: ${chart.sunSign} | Moon Sign: ${chart.moonSign}`,
+    `Moon Nakshatra: ${chart.moonNakshatra}`,
+    `Current Period: ${currentDasha?.lord || "?"} > ${currentAD?.lord || "?"} (${currentDasha?.startDate.getFullYear()}-${currentDasha?.endDate.getFullYear()})`,
+    `Yogas: ${chart.yogas.slice(0, 5).map(y => y.split(":")[0]).join(", ")}`,
+    `\nPlanetary Positions:\n${planets}`,
+    chart.navamsa ? `\nNavamsa Asc: ${chart.navamsa.ascendant.rashiName}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 // --- Computation runner ---
 function runComputations(types: string[], birthDate: string, birthTime: string, lat: number, lon: number) {
   const chart = calculateBirthChart(birthDate, birthTime, lat, lon);
+  const chartSummary = buildChartSummary(chart);
   const results: Record<string, string> = {};
   for (const type of types) {
     const entry = COMPUTATION_REGISTRY[type];
@@ -186,7 +213,7 @@ function runComputations(types: string[], birthDate: string, birthTime: string, 
       catch { results[type] = `[computation error for ${type}]`; }
     }
   }
-  return { chart, results };
+  return { chart, results, chartSummary };
 }
 
 function buildConversationPrompt(question: string, computed: Record<string, string>): string {
@@ -332,9 +359,14 @@ export async function POST(req: NextRequest) {
     const questionTypes = detectQuestionTypes(text);
 
     // 2. Run server-side computations
-    const { results } = runComputations(questionTypes, user.birthDate, user.birthTime, user.latitude, user.longitude);
+    const { results, chartSummary } = runComputations(questionTypes, user.birthDate, user.birthTime, user.latitude, user.longitude);
 
-    // 3. Build prompt with minimal history, call DeepSeek once
+    // 3. Send chart details FIRST (shows the science)
+    const chartMsg = `Your Chart:\n${chartSummary}`;
+    await send(chatId, chartMsg);
+
+    // 4. Build prompt with minimal history, call AI once
+    sendTyping(chatId);
     const systemPrompt = buildConversationPrompt(text, results);
     const recentMessages = await prisma.message.findMany({
       where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 4, select: { role: true, content: true },
