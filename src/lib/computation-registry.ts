@@ -327,18 +327,33 @@ function timingForHouses(chart: BirthChartData, houseNums: number[]): string[] {
   const birthYear = chart.vimsottariDasha[0]?.startDate?.getFullYear() ?? 1983;
   const adultYear = birthYear + 18; // Only show periods after age 18
 
-  const results: string[] = [];
+  const nowYear = new Date().getFullYear();
+  const past: string[] = [];
+  const future: string[] = [];
   for (const md of chart.vimsottariDasha) {
     if (!md.antardashas) continue;
     for (const ad of md.antardashas) {
-      // Skip childhood periods for life event timing
       if (ad.startDate.getFullYear() < adultYear) continue;
-      // Skip far future periods (50+ years from now)
-      if (ad.startDate.getFullYear() > new Date().getFullYear() + 20) continue;
+      if (ad.startDate.getFullYear() > nowYear + 20) continue;
       if (relevantPlanets.has(md.lord) || relevantPlanets.has(ad.lord)) {
-        results.push(`${md.lord}-${ad.lord} (${periodStr(ad)})`);
+        const entry = `${md.lord}-${ad.lord} (${periodStr(ad)})`;
+        if (ad.endDate.getFullYear() <= nowYear) {
+          past.push(entry);
+        } else {
+          future.push(entry);
+        }
       }
     }
+  }
+  // Return future periods first, then past — so future is always visible
+  const results: string[] = [];
+  if (future.length > 0) {
+    results.push("UPCOMING PERIODS:");
+    results.push(...future.slice(0, 5));
+  }
+  if (past.length > 0) {
+    results.push("\nPAST PERIODS:");
+    results.push(...past.slice(-5));
   }
   return results;
 }
