@@ -35,11 +35,28 @@ async function sendChartImage(chatId: string, chart: BirthChartData, name?: stri
   try {
     const svgPath = saveChartSVG(chart, name || undefined);
     const svgData = readFileSync(svgPath);
+
+    // Convert SVG to PNG using sharp (bundled with Next.js)
+    let pngBuffer: Buffer;
+    try {
+      const sharp = (await import("sharp")).default;
+      pngBuffer = await sharp(svgData).png().toBuffer();
+    } catch {
+      // If sharp fails, send as document fallback
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      form.append("document", new Blob([svgData], { type: "image/svg+xml" }), "birth-chart.svg");
+      form.append("caption", "Your Birth Chart (South Indian Style)");
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
+      return;
+    }
+
+    // Send as inline photo
     const form = new FormData();
     form.append("chat_id", chatId);
-    form.append("document", new Blob([svgData], { type: "image/svg+xml" }), "birth-chart.svg");
+    form.append("photo", new Blob([pngBuffer], { type: "image/png" }), "birth-chart.png");
     form.append("caption", "Your Birth Chart (South Indian Style)");
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
       method: "POST",
       body: form,
     });
