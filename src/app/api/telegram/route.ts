@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { calculateBirthChart } from "@/lib/astrology";
+import { calculateBirthChart, BirthChartData } from "@/lib/astrology";
 import { COMPUTATION_REGISTRY } from "@/lib/computation-registry";
 
 // --- Constants ---
