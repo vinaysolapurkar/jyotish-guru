@@ -75,3 +75,13 @@ next-env.d.ts
 
 # Large assets that shouldn't be tracked
 vedic_astro_textbook.pdf
+.env*.local
+.env
+.env.*
+!.env.example
+*.key
+node_modules/
+.next/
+venv/
+.venv/
+__pycache__/
